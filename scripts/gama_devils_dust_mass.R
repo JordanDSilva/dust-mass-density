@@ -85,7 +85,7 @@ LL = function(p, Data){
   return( like )
 }
 
-mdustvec = seq(0.5, 15.5, 0.1)
+mdustvec = seq(4.5, 15.5, 0.1)
 compute_mass_function = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor, fit_fun, vmax_bins = NULL, vmax = NULL, vmaxErr = NULL, meanxErr = NULL, do_optim = FALSE, do_fit = FALSE, do_fit_quantiles = TRUE, Niters = 1000, do_plot = FALSE, add = TRUE, pt.col = "black", ln.alpha = 1.0){
   
   sm_mids = sm_bins[-length(sm_bins)] + diff(sm_bins) / 2
@@ -289,192 +289,6 @@ compute_mass_function = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor
       "vmax" = df_vmax,
       "fit" = df_fit,
       "highout" = highout,
-      "cosmic" = df_cosmic
-    )
-  )
-}
-compute_mass_functionV2 = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor, df=5, vmax_bins = NULL, vmax = NULL, vmaxErr = NULL, meanxErr = NULL, do_optim = FALSE, do_fit = FALSE, do_fit_quantiles = TRUE, Niters = 1000, do_plot = FALSE, add = TRUE, pt.col = "black", ln.alpha = 1.0){
-  
-  sm_mids = sm_bins[-length(sm_bins)] + diff(sm_bins) / 2
-  ddmm = abs(sm_bins[1] - sm_bins[2])
-  vol = 4*pi/3 * (cosdistCoDist(z = zhi, ref = 'Planck18')^3 - cosdistCoDist(z = zlo, ref = 'Planck18')^3)
-  
-  zidx = z >= zlo & z < zhi & x > 0
-  Mdust = log10(x[zidx])
-  MdustErr = x_err[zidx] / (log(10) * x[zidx])
-  vol = rep(vol, sum(zidx)) * areas[zidx] / (4*pi*(180/pi)^2)
-  
-  if(is.null(vmax) & is.null(vmaxErr) & is.null(vmax_bins) & is.null(meanxErr)){
-    vvmax = foreach(j = 1:length(sm_mids), .combine = "c") %do% {
-      midx = Mdust >= sm_bins[j] & Mdust < sm_bins[j+1]
-      sum(vol[midx]^-1)
-    }/ddmm
-    vvmaxErr = foreach(j = 1:length(sm_mids), .combine = "c") %do% {
-      midx = Mdust >= sm_bins[j] & Mdust < sm_bins[j+1]
-      sqrt(sum(vol[midx]^-2))
-    }/ddmm
-    mmeanxErr = foreach(j = 1:length(sm_mids), .combine = "c") %do% {
-      midx = Mdust >= sm_bins[j] & Mdust < sm_bins[j+1]
-      if(sum(midx) == 0){
-        0
-      }else{
-        median(MdustErr[midx])
-      }
-    }
-  }else{
-    vvmax = vmax
-    vvmaxErr = vmaxErr
-    sm_mids = vmax_bins
-    mmeanxErr = meanxErr
-  }
-  
-  vvmaxErr = sqrt(vvmaxErr^2 + (errFloor * vvmax)^2)
-  
-  # Mdust_lim = pmax( , 5.5 )
-  Mdust_lim = sm_mids[which.max(vvmax)] + 0.3
-  Mdust_uplim = rev(sm_mids)[max(which( sapply(rev(sm_mids), function(x) sum(vvmax[sm_mids <= x & sm_mids > Mdust_lim]==0) >= 2 ) ))]
-  
-  sm_mids_fit = sm_mids[vvmax > 0 & sm_mids > Mdust_lim]
-  sm_mids_fit_err = mmeanxErr[vvmax > 0 & sm_mids > Mdust_lim]
-  vvmax_fit = log10( vvmax[vvmax > 0 & sm_mids > Mdust_lim] )
-  vvmax_fit_err = vvmaxErr[vvmax > 0 & sm_mids > Mdust_lim]/( vvmax[vvmax > 0 & sm_mids > Mdust_lim] * log(10))
-  
-  # print(sm_mids_fit)
-  # print(sm_mids_fit_err)
-  # print(vvmax_fit)
-  # print(vvmax_fit_err)
-  
-  if(do_fit){
-    
-    if(do_optim){
-      
-      sm_spl = smooth.spline(
-        c( sm_mids_fit, Mdust_uplim ), 
-        c( vvmax_fit, -15 ),
-        w = c( vvmax_fit_err^-2, max(vvmax_fit_err^-2) ),
-        df = df
-      )
-      out = 10^predict(sm_spl, mdustvec)$y
-      
-      q16_fit = out
-      q50_fit = out
-      q84_fit = out
-    }else{
-      
-      fit_samples = foreach(ii = 1:Niters, .combine = rbind, .errorhandling = "remove") %do% {
-       
-        xx_sample_jostle = rnorm(n = length(sm_mids_fit), mean = sm_mids_fit, sd = sm_mids_fit_err)
-        yy_sample_jostle = rnorm(n = length(vvmax_fit), mean = vvmax_fit, sd = vvmax_fit_err)
-        
-        Mdust_uplim_jostle = rev(xx_sample_jostle)[max(which( sapply(rev(xx_sample_jostle), function(x) sum(vvmax[sm_mids <= x & sm_mids > Mdust_lim]==0) >= 2 ) ))]
-        
-        sm_spl = smooth.spline(
-          c( sm_mids_fit, Mdust_uplim ), 
-          c( yy_sample_jostle, -15 ),
-          w = c( vvmax_fit_err^-2, 100 ),
-          df = df
-        )
-        out = 10^predict(sm_spl, mdustvec)$y
-      }
-      
-      q16_fit = colQuantiles(
-        as.matrix(fit_samples), probs = 0.16
-      )
-      q50_fit = colQuantiles(
-        as.matrix(fit_samples), probs = 0.50
-      )
-      q84_fit = colQuantiles(
-        as.matrix(fit_samples), probs = 0.84
-      )
-    }
-    
-    df_fit = data.frame(
-      "x" = 10^mdustvec,
-      "Q50" = q50_fit,
-      "Q16" = q16_fit,
-      "Q84" = q84_fit
-    )
-    df_fit$ERR = 0.5*(df_fit$Q84 - df_fit$Q16)
-    df_cosmic = data.frame(
-      "Q50" = trapz(
-        x = mdustvec,
-        y = 10^mdustvec * q50_fit
-      ),
-      "Q16" = trapz(
-        x = mdustvec,
-        y = 10^mdustvec * q16_fit
-      ),
-      "Q84" = trapz(
-        x = mdustvec,
-        y = 10^mdustvec * q84_fit
-      ),
-      "Q50_lim" = trapz(
-        x = mdustvec[mdustvec >= Mdust_lim & mdustvec <= Mdust_uplim],
-        y = 10^mdustvec[mdustvec >= Mdust_lim & mdustvec <= Mdust_uplim] * q50_fit[mdustvec >= Mdust_lim & mdustvec <= Mdust_uplim]
-      )
-    )
-    df_cosmic$ERR = 0.5*(df_cosmic$Q84 - df_cosmic$Q16)
-  }else{
-    df_fit = list(NULL)
-    df_cosmic = list(NULL)
-    highout = list(NULL)
-  }
-  
-  df_vmax = data.frame(
-    "x" = sm_mids,
-    "vmax" = vvmax,
-    "vmaxErr" = vvmaxErr,
-    "meanxErr" = mmeanxErr,
-    "mlim" = as.numeric(sm_mids >= Mdust_lim)
-  )
-  
-  if(do_plot){
-    if(add){
-      points(
-        10^sm_mids, vvmax,
-        pch = 1, 
-        cex = 1.5,
-        col = alpha(pt.col, ln.alpha)
-      )
-    }else{
-      magplot(
-        10^sm_mids, vvmax, log = "xy", pch = 1, cex = 1.5, xlim = 10^c(2.5, 13.5), ylim = c(1e-10, 1), col = alpha(pt.col, ln.alpha),
-        xlab = "Dust Mass [Msun]",
-        ylab = "Phi [Mpc^-3 dex^-1]"
-      )
-    }
-    
-    magerr(
-      10^sm_mids, vvmax, ylo = vvmaxErr, xlo = sqrt( (mmeanxErr * log(10))^2 * (10^sm_mids)^2 ), col = alpha(pt.col, ln.alpha)
-    )
-    if(do_fit){
-      
-      lines(
-        10^mdustvec, q50_fit, lw = 2, col = alpha(pt.col, ln.alpha)
-      )
-      
-      if(do_fit_quantiles){
-        lines(
-          10^mdustvec, q16_fit, lw = 2, lty = 2, col = alpha(pt.col, ln.alpha)
-        )
-        lines(
-          10^mdustvec, q84_fit, lw = 2, lty = 2, col = alpha(pt.col, ln.alpha)
-        )
-      }
-    }
-    # abline(v = 10^Mdust_lim, col = pt.col)
-    # abline(v = 10^Mdust_uplim, col = pt.col)
-    
-    legend(
-      x = "topright", 
-      legend = paste0(round(zlo,3), "< z <", round(zhi,3))
-    )
-  }
-  
-  return(
-    list(
-      "vmax" = df_vmax,
-      "fit" = df_fit,
       "cosmic" = df_cosmic
     )
   )
@@ -948,254 +762,6 @@ dust_mass_density_wAGN = foreach(i = 1:(length(zbins)-1)) %do% {
 }
 
 gc()
-csmh_edd_corrV2 = foreach(i = 1:(length(zbins)-1), .errorhandling = "pass") %do% {
-  
-  sink("~/Documents/DustMassDensity/scripts/temp.txt")
-  message(lbt_mids[i])
-  png(paste0("~/Documents/DustMassDensity/plots/edd_bias_smf/lbt_", lbt_mids[i], ".png"), width = 7, height = 5, units = "in", res = 240)
-  
-  gama_x = sort_match_noAGN$StellarMass_50
-  gama_err = 0.5 * (sort_match_noAGN$StellarMass_84 - sort_match_noAGN$StellarMass_16)
-  # gama_err = gama_err/(log(10) * gama_x)
-  # gama_x = log10(gama_x)
-  
-  devils_x = devilsd10_noAGN$StellarMass
-  devils_err = 0.5 * (devilsd10_noAGN$StellarMass_UB - devilsd10_noAGN$StellarMass_LB)
-  # devils_err = devils_err/(log(10) * devils_x)
-  # devils_x = log10(devils_x)
-  
-  temp = c()
-  # temp = foreach(j = 1:10, .combine = c, .errorhandling = "remove") %do% {
-  
-  for(j in 1:100){
-    
-    set.seed(j)
-    gama_samples_ = rnorm(n = length(gama_x), mean = gama_x, sd = gama_err)
-    
-    GAMA = compute_mass_function(
-      zlo = zbins[i],
-      zhi = zbins[i+1],
-      z = sort_match_noAGN$z,
-      x = gama_samples_,
-      x_err = gama_err,
-      areas = rep(217.54, length(sort_match_noAGN$z)),
-      sm_bins = sm_bins,
-      errFloor = 0.0,
-      do_fit = FALSE,
-      do_plot = TRUE,
-      add = j!=1,
-      pt.col = "purple",
-      ln.alpha = 0.1
-    )
-    
-    devils_sample_ = rnorm(n = length(devils_x), mean = devils_x, sd = devils_err)
-    DEVILS = compute_mass_function(
-      zlo = zbins[i],
-      zhi = zbins[i+1],
-      z = devilsd10_noAGN$z,
-      x = devils_sample_,
-      x_err = devils_err,
-      areas = rep(1.5, length(devilsd10_noAGN$z)),
-      sm_bins = sm_bins,
-      errFloor = 0.0,
-      do_fit = FALSE,
-      do_plot = TRUE,
-      add = TRUE,
-      pt.col = "cornflowerblue",
-      ln.alpha = 0.1
-    )
-    
-    vmax_combine = foreach(k = 1:(length(sm_bins)-1) , .combine = rbind) %do% {
-      
-      if( GAMA$vmax$vmaxErr[k] <= ifelse(DEVILS$vmax$vmaxErr[k]==0, 999, DEVILS$vmax$vmaxErr[k]) ){
-        if( !GAMA$vmax$mlim[k] ){
-          c(DEVILS$vmax$x[k], DEVILS$vmax$vmax[k], DEVILS$vmax$vmaxErr[k], DEVILS$vmax$meanxErr[k])
-        }else{
-          if( (DEVILS$vmax$vmax[k] - GAMA$vmax$vmax[k])/(GAMA$vmax$vmaxErr[k] + 1e-323) > 5 ){
-            c(DEVILS$vmax$x[k], DEVILS$vmax$vmax[k], DEVILS$vmax$vmaxErr[k], DEVILS$vmax$meanxErr[k])
-          }else{
-            c(GAMA$vmax$x[k], GAMA$vmax$vmax[k], GAMA$vmax$vmaxErr[k], GAMA$vmax$meanxErr[k])
-          }
-        }
-      }else{
-        c(DEVILS$vmax$x[k], DEVILS$vmax$vmax[k], DEVILS$vmax$vmaxErr[k], DEVILS$vmax$meanxErr[k])
-      }
-    }
-    
-    fit = suppressMessages(compute_mass_function(
-      zlo = zbins[i],
-      zhi = zbins[i+1],
-      
-      ## Not gonna use these
-      z = devilsd10_noAGN$z,
-      x = devils_x,
-      x_err = devils_err,
-      areas = devilsd10_noAGN$area,
-      sm_bins = sm_bins,
-      
-      vmax_bins = vmax_combine[,1],
-      vmax = vmax_combine[,2],
-      vmaxErr = vmax_combine[,3],
-      meanxErr = vmax_combine[,4],
-      
-      errFloor = 0,
-      do_fit = TRUE,
-      do_optim = TRUE,
-      do_fit_quantiles = FALSE,
-      Niters = 100,
-      do_plot = TRUE,
-      add = TRUE,
-      ln.alpha = 0.05
-    ))
-    
-    temp = c(temp, fit$cosmic$Q50)
-    # return( fit$cosmic$Q50 )
-    # return( NULL )
-  }
-  
-  lines(
-    10^mdustvec,
-    stellar_mass_density[[i]]$fit$Q50, 
-    col = "red"
-  )
-  points(
-    10^stellar_mass_density[[i]]$vmax$x[fit$vmax$mlim == 1],
-    stellar_mass_density[[i]]$vmax$vmax[fit$vmax$mlim == 1],
-    pch = 16, col = "red"
-  )
-  dev.off()
-  
-  sink()
-  file.remove("~/Documents/DustMassDensity/scripts/temp.txt")
-  
-  # return( colMedians(as.matrix(temp), na.rm = TRUE) )
-  return( temp )
-}
-cdmh_edd_corrV2 = foreach(i = 1:(length(zbins)-1), .errorhandling = "pass") %do% {
-  
-  sink("~/Documents/DustMassDensity/scripts/temp.txt")
-  message(lbt_mids[i])
-  png(paste0("~/Documents/DustMassDensity/plots/edd_bias/lbt_", lbt_mids[i], ".png"), width = 7, height = 5, units = "in", res = 240)
-  
-  gama_x = sort_match_noAGN$DustMass_50
-  gama_err = 0.5 * (sort_match_noAGN$DustMass_84 - sort_match_noAGN$DustMass_16)
-  # gama_err = gama_err/(log(10) * gama_x)
-  # gama_x = log10(gama_x)
-  
-  devils_x = devilsd10_noAGN$dustmass.total
-  devils_err = 0.5 * (devilsd10_noAGN$dustmass.total_UB - devilsd10_noAGN$dustmass.total_LB)
-  # devils_err = devils_err/(log(10) * devils_x)
-  # devils_x = log10(devils_x)
-
-  temp = c()
-  # temp = foreach(j = 1:10, .combine = c, .errorhandling = "remove") %do% {
-
-  for(j in 1:100){
-    
-    set.seed(j)
-    gama_samples_ = rnorm(n = length(gama_x), mean = gama_x, sd = gama_err)
-    
-    GAMA = compute_mass_function(
-      zlo = zbins[i],
-      zhi = zbins[i+1],
-      z = sort_match_noAGN$z,
-      x = gama_samples_,
-      x_err = gama_err,
-      areas = rep(217.54, length(sort_match_noAGN$z)),
-      sm_bins = sm_bins,
-      errFloor = 0.0,
-      do_fit = FALSE,
-      do_plot = TRUE,
-      add = j!=1,
-      pt.col = "purple",
-      ln.alpha = 0.1
-    )
-    
-    devils_sample_ = rnorm(n = length(devils_x), mean = devils_x, sd = devils_err)
-    DEVILS = compute_mass_function(
-      zlo = zbins[i],
-      zhi = zbins[i+1],
-      z = devilsd10_noAGN$z,
-      x = devils_sample_,
-      x_err = devils_err,
-      areas = rep(1.5, length(devilsd10_noAGN$z)),
-      sm_bins = sm_bins,
-      errFloor = 0.0,
-      do_fit = FALSE,
-      do_plot = TRUE,
-      add = TRUE,
-      pt.col = "cornflowerblue",
-      ln.alpha = 0.1
-    )
-    
-    vmax_combine = foreach(k = 1:(length(sm_bins)-1) , .combine = rbind) %do% {
-      
-      if( GAMA$vmax$vmaxErr[k] <= ifelse(DEVILS$vmax$vmaxErr[k]==0, 999, DEVILS$vmax$vmaxErr[k]) ){
-        if( !GAMA$vmax$mlim[k] ){
-          c(DEVILS$vmax$x[k], DEVILS$vmax$vmax[k], DEVILS$vmax$vmaxErr[k], DEVILS$vmax$meanxErr[k])
-        }else{
-          if( (DEVILS$vmax$vmax[k] - GAMA$vmax$vmax[k])/(GAMA$vmax$vmaxErr[k] + 1e-323) > 5 ){
-            c(DEVILS$vmax$x[k], DEVILS$vmax$vmax[k], DEVILS$vmax$vmaxErr[k], DEVILS$vmax$meanxErr[k])
-          }else{
-            c(GAMA$vmax$x[k], GAMA$vmax$vmax[k], GAMA$vmax$vmaxErr[k], GAMA$vmax$meanxErr[k])
-          }
-        }
-      }else{
-        c(DEVILS$vmax$x[k], DEVILS$vmax$vmax[k], DEVILS$vmax$vmaxErr[k], DEVILS$vmax$meanxErr[k])
-      }
-    }
-    
-    fit = suppressMessages(compute_mass_function(
-      zlo = zbins[i],
-      zhi = zbins[i+1],
-
-      ## Not gonna use these
-      z = devilsd10_noAGN$z,
-      x = devilsd10_noAGN$dustmass.total,
-      x_err = 0.5 * (devilsd10_noAGN$dustmass.total_UB - devilsd10_noAGN$dustmass.total_LB),
-      areas = devilsd10_noAGN$area,
-      sm_bins = sm_bins,
-
-      vmax_bins = vmax_combine[,1],
-      vmax = vmax_combine[,2],
-      vmaxErr = vmax_combine[,3],
-      meanxErr = vmax_combine[,4],
-
-      errFloor = 0,
-      do_fit = TRUE,
-      do_optim = TRUE,
-      do_fit_quantiles = FALSE,
-      Niters = 100,
-      do_plot = TRUE,
-      add = TRUE,
-      ln.alpha = 0.05
-    ))
-
-    temp = c(temp, fit$cosmic$Q50)
-    # return( fit$cosmic$Q50 )
-    # return( NULL )
-  }
-  
-  lines(
-    10^mdustvec,
-    dust_mass_density[[i]]$fit$Q50, 
-    col = "red"
-  )
-  points(
-    10^dust_mass_density[[i]]$vmax$x[fit$vmax$mlim == 1],
-    dust_mass_density[[i]]$vmax$vmax[fit$vmax$mlim == 1],
-    pch = 16, col = "red"
-  )
-  dev.off()
-  
-  sink()
-  file.remove("~/Documents/DustMassDensity/scripts/temp.txt")
-  
-  # return( colMedians(as.matrix(temp), na.rm = TRUE) )
-  return( temp )
-}
-
-gc()
 csmh = data.frame(foreach(i = 1:length(stellar_mass_density), .combine = bind_rows) %do% {
   stellar_mass_density[[i]]$cosmic
 })
@@ -1205,13 +771,6 @@ cdmh = data.frame(foreach(i = 1:length(dust_mass_density), .combine = bind_rows)
 cdmh_wAGN = data.frame(foreach(i = 1:length(dust_mass_density_wAGN), .combine = bind_rows) %do% {
   dust_mass_density_wAGN[[i]]$cosmic
 })
-
-print(
-  log10(sapply(csmh_edd_corrV2, sd)) 
-)
-print(
-  log10(cdmh_edd_corrV2) - log10(cdmh$Q50)
-)
 
 dsilva25 = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/csfh/DSilva25_CSFH_CAGNH_fit.csv"))
 dsilva_csmh_func = approxfun(
@@ -1241,16 +800,12 @@ h5delete(h5file, "zbins")
 h5delete(h5file, "lbtmids")
 h5delete(h5file, "lbtbins")
 h5delete(h5file, "LSSCorrection")
-h5delete(h5file, "EddingtonCorrectionSMF")
-h5delete(h5file, "EddingtonCorrection")
 
 h5write(obj = zmids, h5file, name = "zmids")
 h5write(obj = zbins, h5file, name = "zbins")
 h5write(obj = lbt_mids, h5file, name = "lbtmids")
 h5write(obj = lbt_bins, h5file, name = "lbtbins")
 h5write(obj = LSS_corr, h5file, name = "LSSCorrection")
-h5write(obj = csmh_edd_corrV2/csmh$Q50, h5file, name = "EddingtonCorrectionSMF")
-h5write(obj = cdmh_edd_corrV2/cdmh$Q50, h5file, name = "EddingtonCorrection")
 
 h5delete(h5file, "cosmic")
 h5createGroup(h5file, "cosmic")
@@ -1329,3 +884,12 @@ driver18_cdmh$err_AGN = sqrt( (10^driver18_cdmh$cdmh * log(10) * driver18_cdmh$e
 driver18_cdmh$err = sqrt( driver18_cdmh$err_pois^2 + driver18_cdmh$err_cv^2 + driver18_cdmh$err_AGN^2 )
 driver18_cdmh$cdmh = 10^driver18_cdmh$cdmh
 fwrite(driver18_cdmh, "~/Documents/DustMassDensity/data/literature_evo/cdmh/driver18.csv")
+
+totSED = ProSpectSED(
+  Dale = Dale_NormTot,
+  Dale_M2L_func = Dale_M2L_func,
+  speclib = BC03lr,
+  ref = "Planck18", 
+  alpha_SF_screen = 1
+)
+totSED$dustmass
