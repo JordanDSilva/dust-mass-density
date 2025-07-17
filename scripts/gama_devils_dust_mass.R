@@ -40,7 +40,7 @@ sort_match_noAGN$z = sort_match_AGN$z
 sort_match_noAGN$area = 217.54
 
 zvec = seq(0, 30, 0.01)
-lbtvec = cosdistTravelTime(z = zvec, ref = "737")
+lbtvec = cosdistTravelTime(z = zvec, ref = "Planck18")
 lbt2z = approxfun(
   lbtvec, zvec
 )
@@ -873,6 +873,7 @@ for(i in 1:length(dust_mass_density_wAGN)){
 driver18_cdmh_raw = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/cdmh/driver18_raw.csv", skip = 3))
 driver18_cdmh = data.frame(
     "lbt" = driver18_cdmh_raw$V1,
+    "z" = lbt2z(v = unlist(driver18_cdmh_raw$V1)),
     "cdmh" = driver18_cdmh_raw$V3,
     "err_pois" = as.numeric(str_remove(driver18_cdmh_raw$V5, "±")),
     "err_cv" = as.numeric(str_remove(driver18_cdmh_raw$V7, "±")),
@@ -884,12 +885,3 @@ driver18_cdmh$err_AGN = sqrt( (10^driver18_cdmh$cdmh * log(10) * driver18_cdmh$e
 driver18_cdmh$err = sqrt( driver18_cdmh$err_pois^2 + driver18_cdmh$err_cv^2 + driver18_cdmh$err_AGN^2 )
 driver18_cdmh$cdmh = 10^driver18_cdmh$cdmh
 fwrite(driver18_cdmh, "~/Documents/DustMassDensity/data/literature_evo/cdmh/driver18.csv")
-
-totSED = ProSpectSED(
-  Dale = Dale_NormTot,
-  Dale_M2L_func = Dale_M2L_func,
-  speclib = BC03lr,
-  ref = "Planck18", 
-  alpha_SF_screen = 1
-)
-totSED$dustmass
