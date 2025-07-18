@@ -142,11 +142,11 @@ compute_mass_function = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor
           func = double_schechter, 
           prior = function(p){
             sum(
-              # dnorm(p[1], x = 8.0, sd = 5, log = TRUE),
-              # dnorm(p[2], x = -1.0, sd = 8, log = TRUE),
-              # dnorm(p[3], x = -1.0, sd = 8, log = TRUE),
-              # dnorm(p[4], x = -2.0, sd = 2, log = TRUE),
-              # dnorm(p[5], x = -3.0, sd = 2, log = TRUE),
+              dnorm(p[1], x = 8.0, sd = 5, log = TRUE),
+              dnorm(p[2], x = -1.0, sd = 8, log = TRUE),
+              dnorm(p[3], x = -1.0, sd = 8, log = TRUE),
+              dnorm(p[4], x = -2.0, sd = 2, log = TRUE),
+              dnorm(p[5], x = -3.0, sd = 2, log = TRUE),
               0
             )
           }
@@ -168,11 +168,11 @@ compute_mass_function = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor
           func = double_schechter, 
           prior = function(p){
             sum(
-              # dnorm(p[1], x = 8.0, sd = 5, log = TRUE),
-              # dnorm(p[2], x = -1.0, sd = 8, log = TRUE),
-              # dnorm(p[3], x = -1.0, sd = 8, log = TRUE),
-              # dnorm(p[4], x = -2.0, sd = 2, log = TRUE),
-              # dnorm(p[5], x = -3.0, sd = 2, log = TRUE),
+              dnorm(p[1], x = 8.0, sd = 5, log = TRUE),
+              dnorm(p[2], x = -1.0, sd = 8, log = TRUE),
+              dnorm(p[3], x = -1.0, sd = 8, log = TRUE),
+              dnorm(p[4], x = -2.0, sd = 2, log = TRUE),
+              dnorm(p[5], x = -3.0, sd = 2, log = TRUE),
               0
             )
           }

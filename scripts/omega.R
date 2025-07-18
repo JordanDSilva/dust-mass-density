@@ -42,15 +42,16 @@ h5file = '~/Documents/DustMassDensity/data/all_data.h5'
 zmids = h5read(file = h5file, name = "zmids")
 mdust = h5read(file = h5file, name = "cosmic/Mdust")
 Md_corr = as.numeric(h5read(file = h5file, name = "Md_corr"))
+LSS_corr = h5read(file = h5file, name = "LSSCorrection")
 
 bellstedt20_gasZdensity = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/metallicity/bellstedt20_gazZdensity.csv"))
 
 df = data.frame(
   
   "z" = zmids,
-  "OmegaDustQ50" = (mdust$Q50/Md_corr)/cosgrowRhoCrit(z = 0, ref = "Planck18", Dist = "Co"),
-  "OmegaDustQ16" = (mdust$Q16/Md_corr)/cosgrowRhoCrit(z = 0, ref = "Planck18", Dist = "Co"),
-  "OmegaDustQ84" = (mdust$Q84/Md_corr)/cosgrowRhoCrit(z = 0, ref = "Planck18", Dist = "Co"), 
+  "OmegaDustQ50" = (mdust$Q50/Md_corr*LSS_corr)/cosgrowRhoCrit(z = 0, ref = "Planck18", Dist = "Co"),
+  "OmegaDustQ16" = (mdust$Q16/Md_corr*LSS_corr)/cosgrowRhoCrit(z = 0, ref = "Planck18", Dist = "Co"),
+  "OmegaDustQ84" = (mdust$Q84/Md_corr*LSS_corr)/cosgrowRhoCrit(z = 0, ref = "Planck18", Dist = "Co"), 
   
   "OmegaStarQ50" = approx(x = zvec, y = 10^dsilva25$CSMHQ50, xout = zmids)$y/cosgrowRhoCrit(z = 0, ref = "Planck18", Dist = "Co"),
   "OmegaStarQ16" = approx(x = zvec, y = 10^dsilva25$CSMHQ16, xout = zmids)$y/cosgrowRhoCrit(z = 0, ref = "Planck18", Dist = "Co"),
