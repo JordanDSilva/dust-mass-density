@@ -216,3 +216,7 @@ h5write(
   obj = df_spec, file = h5file, name = "Photometry/WeightedSpec"
 )
 
+foobar = h5read(
+ file = h5file, name = "Photometry/FinalSample"
+)
+
