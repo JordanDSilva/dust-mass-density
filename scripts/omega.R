@@ -68,6 +68,9 @@ peroux_ZDTG = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/
 rhoCrit0 = cosgrowRhoCrit(z = 0, ref = "Planck18", Dist = "Co")
 rhoCritz = cosgrowRhoCrit(z = zmids, ref = "Planck18", Dist = "Co")
 
+HII = fread(
+  "~/Documents/DustMassDensity/data/literature_evo/HIIDensity.csv"
+)
 
 df = data.frame(
 
@@ -82,6 +85,9 @@ df = data.frame(
   "rhoBHQ16" = approx(x = zvec, y = smbhQ16, xout = zmids)$y,
   "rhoBHQ84" = approx(x = zvec, y = smbhQ84, xout = zmids)$y,
   "rhoZgas" = approx(x = lbt2z(bellstedt20_gasZdensity$X), y = bellstedt20_gasZdensity$Y, xout = zmids, rule = 2)$y,
+  "rhoHIIQ50" = approx(x = HII$z, y = HII$HIIQ50, xout = zmids)$y,
+  "rhoHIIQ16" = approx(x = HII$z, y = HII$HIIQ16, xout = zmids)$y,
+  "rhoHIIQ84" = approx(x = HII$z, y = HII$HIIQ84, xout = zmids)$y,
   "rhoCritz" = rhoCritz, 
   "rhoBaryon" = cosgrowOmegaM(z=zmids, ref = "Planck18") * OmegaBaryon/cosgrowOmegaM(z=0, ref = "Planck18") * rhoCritz,
   # "rhoBaryon" = OmegaBaryon * rhoCrit0 * (1+zmids)^3,
