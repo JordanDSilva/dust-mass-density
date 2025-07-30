@@ -98,14 +98,18 @@ compute_mass_function = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor
   vol = rep(vol, sum(zidx)) * areas[zidx] / (4*pi*(180/pi)^2)
 
   if(is.null(vmax) & is.null(vmaxErr) & is.null(vmax_bins) & is.null(meanxErr)){
-    vvmax = foreach(j = 1:length(sm_mids), .combine = "c") %do% {
-      midx = Mdust >= sm_bins[j] & Mdust < sm_bins[j+1]
-      sum(vol[midx]^-1)
-    }/ddmm
-    vvmaxErr = foreach(j = 1:length(sm_mids), .combine = "c") %do% {
-      midx = Mdust >= sm_bins[j] & Mdust < sm_bins[j+1]
-      sqrt(sum(vol[midx]^-2))
-    }/ddmm
+    # vvmax = foreach(j = 1:length(sm_mids), .combine = "c") %do% {
+    #   midx = Mdust >= sm_bins[j] & Mdust < sm_bins[j+1]
+    #   sum(vol[midx]^-1)
+    # }/ddmm
+    # vvmaxErr = foreach(j = 1:length(sm_mids), .combine = "c") %do% {
+    #   midx = Mdust >= sm_bins[j] & Mdust < sm_bins[j+1]
+    #   sqrt(sum(vol[midx]^-2))
+    # }/ddmm
+    
+    hh = maghist(Mdust, breaks = sm_bins, plot = FALSE)
+    vvmax = hh$counts / (unique(vol) * ddmm)
+    vvmaxErr = sqrt(hh$counts) / (unique(vol) * ddmm)
     mmeanxErr = foreach(j = 1:length(sm_mids), .combine = "c") %do% {
       midx = Mdust >= sm_bins[j] & Mdust < sm_bins[j+1]
       if(sum(midx) == 0){
@@ -142,11 +146,11 @@ compute_mass_function = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor
           func = double_schechter, 
           prior = function(p){
             sum(
-              dnorm(p[1], x = 8.0, sd = 5, log = TRUE),
-              dnorm(p[2], x = -1.0, sd = 8, log = TRUE),
-              dnorm(p[3], x = -1.0, sd = 8, log = TRUE),
-              dnorm(p[4], x = -2.0, sd = 2, log = TRUE),
-              dnorm(p[5], x = -3.0, sd = 2, log = TRUE),
+              # dnorm(p[1], x = 8.0, sd = 8, log = TRUE),
+              # dnorm(p[2], x = -1.0, sd = 8, log = TRUE),
+              # dnorm(p[3], x = -1.0, sd = 8, log = TRUE),
+              # dnorm(p[4], x = -2.0, sd = 8, log = TRUE),
+              # dnorm(p[5], x = -3.0, sd = 8, log = TRUE),
               0
             )
           }
@@ -168,11 +172,11 @@ compute_mass_function = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor
           func = double_schechter, 
           prior = function(p){
             sum(
-              dnorm(p[1], x = 8.0, sd = 5, log = TRUE),
-              dnorm(p[2], x = -1.0, sd = 8, log = TRUE),
-              dnorm(p[3], x = -1.0, sd = 8, log = TRUE),
-              dnorm(p[4], x = -2.0, sd = 2, log = TRUE),
-              dnorm(p[5], x = -3.0, sd = 2, log = TRUE),
+              # dnorm(p[1], x = 8.0, sd = 8, log = TRUE),
+              # dnorm(p[2], x = -1.0, sd = 8, log = TRUE),
+              # dnorm(p[3], x = -1.0, sd = 8, log = TRUE),
+              # dnorm(p[4], x = -2.0, sd = 8, log = TRUE),
+              # dnorm(p[5], x = -3.0, sd = 8, log = TRUE),
               0
             )
           }
@@ -530,7 +534,7 @@ stellar_mass_density = foreach(i = 1:(length(zbins)-1)) %do% {
     x_err = 0.5 * (sort_match_noAGN$StellarMass_84 - sort_match_noAGN$StellarMass_16),
     areas = rep(217.54, length(sort_match_noAGN$z)),
     sm_bins = sm_bins,
-    errFloor = 0.1,
+    errFloor = 0.0,
     do_fit = FALSE,
     do_plot = TRUE,
     add = FALSE,
@@ -544,7 +548,7 @@ stellar_mass_density = foreach(i = 1:(length(zbins)-1)) %do% {
     x_err = 0.5 * (devilsd10_noAGN$StellarMass_UB - devilsd10_noAGN$StellarMass_LB),
     areas = rep(1.5, length(devilsd10_noAGN$z)),
     sm_bins = sm_bins,
-    errFloor = 0.1,
+    errFloor = 0.0,
     do_fit = FALSE,
     do_plot = TRUE,
     add = TRUE,
@@ -584,7 +588,7 @@ stellar_mass_density = foreach(i = 1:(length(zbins)-1)) %do% {
     vmax = vmax_combine[,2],
     vmaxErr = sqrt( vmax_combine[,3]^2 + smf_mc_err[[i]]^2 ),
     meanxErr = vmax_combine[,4],
-    errFloor = 0,
+    errFloor = 0.1,
     do_fit = TRUE,
     do_plot = TRUE,
     add = TRUE
@@ -612,7 +616,7 @@ dust_mass_density = foreach(i = 1:(length(zbins)-1)) %do% {
     x_err = 0.5 * (sort_match_noAGN$DustMass_84 - sort_match_noAGN$DustMass_16),
     areas = rep(217.54, length(sort_match_noAGN$z)),
     sm_bins = sm_bins,
-    errFloor = 0.1,
+    errFloor = 0.0,
     do_fit = FALSE,
     do_plot = TRUE,
     add = FALSE,
@@ -626,7 +630,7 @@ dust_mass_density = foreach(i = 1:(length(zbins)-1)) %do% {
     x_err = 0.5 * (devilsd10_noAGN$dustmass.total_UB - devilsd10_noAGN$dustmass.total_LB),
     areas = rep(1.5, length(devilsd10_noAGN$z)),
     sm_bins = sm_bins,
-    errFloor = 0.1,
+    errFloor = 0.0,
     do_fit = FALSE,
     do_plot = TRUE,
     add = TRUE,
@@ -664,7 +668,7 @@ dust_mass_density = foreach(i = 1:(length(zbins)-1)) %do% {
     vmax = vmax_combine[,2],
     vmaxErr = sqrt( vmax_combine[,3]^2 + dmf_mc_err[[i]]^2),
     meanxErr = vmax_combine[,4],
-    errFloor = 0.0,
+    errFloor = 0.1,
     do_fit = TRUE,
     do_plot = TRUE,
     add = TRUE,
@@ -691,7 +695,7 @@ dust_mass_density_wAGN = foreach(i = 1:(length(zbins)-1)) %do% {
     x_err = 0.5 * (sort_match_AGN$dustmass.total_UB - sort_match_AGN$dustmass.total_LB),
     areas = rep(217.54, length(sort_match_AGN$z)),
     sm_bins = sm_bins,
-    errFloor = 0.1,
+    errFloor = 0.0,
     do_fit = FALSE,
     do_plot = TRUE,
     add = FALSE,
@@ -705,7 +709,7 @@ dust_mass_density_wAGN = foreach(i = 1:(length(zbins)-1)) %do% {
     x_err = 0.5 * (devilsd10_AGN$dustmass.total_UB - devilsd10_AGN$dustmass.birth_LB),
     areas = rep(1.5, length(devilsd10_AGN$z)),
     sm_bins = sm_bins,
-    errFloor = 0.1,
+    errFloor = 0.0,
     do_fit = FALSE,
     do_plot = TRUE,
     add = TRUE,
@@ -745,7 +749,7 @@ dust_mass_density_wAGN = foreach(i = 1:(length(zbins)-1)) %do% {
     vmax = vmax_combine[,2],
     vmaxErr = sqrt( vmax_combine[,3]^2 + dmf_wAGN_mc_err[[i]]^2 ),
     meanxErr = vmax_combine[,4],
-    errFloor = 0,
+    errFloor = 0.1,
     do_fit = TRUE,
     do_plot = TRUE,
     add = TRUE
@@ -771,6 +775,20 @@ cdmh = data.frame(foreach(i = 1:length(dust_mass_density), .combine = bind_rows)
 cdmh_wAGN = data.frame(foreach(i = 1:length(dust_mass_density_wAGN), .combine = bind_rows) %do% {
   dust_mass_density_wAGN[[i]]$cosmic
 })
+
+fit_par = foreach(i = 1:length(dust_mass_density), .combine = rbind) %do% {
+  temp = colQuantiles(dust_mass_density[[i]]$highout$LD_last$Posterior1, probs = c(0.5, 0.16, 0.84))
+  # temp[,4] = temp[,1] - temp[,2]
+  # temp[,5] = temp[,3] - temp[,1]
+  # 
+  # cbind(
+  #   t(temp[,1]), t(0.5 * (temp[,3] - temp[,2]))
+  # )
+  cbind(
+    t(0.5 * (temp[,3] - temp[,2]))
+  )
+
+}
 
 dsilva25 = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/csfh/DSilva25_CSFH_CAGNH_fit.csv"))
 dsilva_csmh_func = approxfun(
