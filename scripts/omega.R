@@ -45,7 +45,7 @@ LSS_corr = h5read(file = h5file, name = "LSSCorrection")
 bellstedt20_gasZdensity = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/metallicity/bellstedt20_gazZdensity.csv"))
 bellstedt20_meanZ = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/metallicity/bellstedt20_meanZgas.csv"))
 
-peroux_ZDTG = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/omega/aa58_peroux_suppl_tables/Peroux_SupplementalTable4_Fig7_10.asc"))
+# peroux_ZDTG = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/omega/aa58_peroux_suppl_tables/Peroux_SupplementalTable4_Fig7_10.asc"))
 
 # magplot(
 #   peroux_ZDTG$log_Z,
