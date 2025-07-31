@@ -86,7 +86,7 @@ LL = function(p, Data){
 }
 
 mdustvec = seq(4.5, 15.5, 0.1)
-compute_mass_function = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor, fit_fun, vmax_bins = NULL, vmax = NULL, vmaxErr = NULL, meanxErr = NULL, do_optim = FALSE, do_fit = FALSE, do_fit_quantiles = TRUE, Niters = 1000, do_plot = FALSE, add = TRUE, pt.col = "black", ln.alpha = 1.0){
+compute_mass_function = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor, fit_fun, vmax_bins = NULL, vmax = NULL, vmaxErr = NULL, meanxErr = NULL, do_optim = FALSE, do_fit = FALSE, do_fit_quantiles = TRUE, Niters = 2000, do_plot = FALSE, add = TRUE, pt.col = "black", ln.alpha = 1.0){
   
   sm_mids = sm_bins[-length(sm_bins)] + diff(sm_bins) / 2
   ddmm = abs(sm_bins[1] - sm_bins[2])
@@ -128,7 +128,7 @@ compute_mass_function = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor
   vvmaxErr = sqrt( vvmaxErr^2 + (errFloor * vvmax)^2 )
 
   # Mdust_lim = pmax( , 5.5 )
-  Mdust_lim = sm_mids[which.max(vvmax)] + 0.3
+  Mdust_lim = sm_mids[which.max(vvmax)]
   Mdust_uplim = rev(sm_mids)[max(which( sapply(rev(sm_mids), function(x) sum(vvmax[sm_mids <= x & sm_mids > Mdust_lim]==0) >= 2 ) ))]
   
   if(do_fit){
@@ -140,17 +140,17 @@ compute_mass_function = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor
         # method = "L-BFGS-B",
         control = list("fnscale" = -1), 
         Data = list(
-          xx = sm_mids[vvmax > 0 & sm_mids > Mdust_lim], 
-          yy = vvmax[vvmax > 0 & sm_mids > Mdust_lim], 
-          yyerr = vvmaxErr[vvmax > 0 & sm_mids > Mdust_lim], 
+          xx = sm_mids[vvmax > 0 & sm_mids >= Mdust_lim], 
+          yy = vvmax[vvmax > 0 & sm_mids >= Mdust_lim], 
+          yyerr = vvmaxErr[vvmax > 0 & sm_mids >= Mdust_lim], 
           func = double_schechter, 
           prior = function(p){
             sum(
-              # dnorm(p[1], x = 8.0, sd = 8, log = TRUE),
-              # dnorm(p[2], x = -1.0, sd = 8, log = TRUE),
-              # dnorm(p[3], x = -1.0, sd = 8, log = TRUE),
-              # dnorm(p[4], x = -2.0, sd = 8, log = TRUE),
-              # dnorm(p[5], x = -3.0, sd = 8, log = TRUE),
+              dnorm(p[1], x = 8.0, sd = 4.0, log = TRUE),
+              dnorm(p[2], x = -1.0, sd = 1.0, log = TRUE),
+              dnorm(p[3], x = -1.0, sd = 1.0, log = TRUE),
+              dnorm(p[4], x = -2.0, sd = 4.0, log = TRUE),
+              dnorm(p[5], x = -3.0, sd = 4.0, log = TRUE),
               0
             )
           }
@@ -165,18 +165,20 @@ compute_mass_function = function(zlo, zhi, z, x, x_err, areas, sm_bins, errFloor
     }else{
       highout = Highlander(
         parm = c(8, -1, -1, -2, -3), 
+        lower = c(5, -2.5, -2.5, -8, -8),
+        upper = c(13, 2.5, 2.5, 1, 1),
         Data = list(
-          xx = sm_mids[vvmax > 0 & sm_mids > Mdust_lim], 
-          yy = vvmax[vvmax > 0 & sm_mids > Mdust_lim], 
-          yyerr = vvmaxErr[vvmax > 0 & sm_mids > Mdust_lim], 
+          xx = sm_mids[vvmax > 0 & sm_mids >= Mdust_lim], 
+          yy = vvmax[vvmax > 0 & sm_mids >= Mdust_lim], 
+          yyerr = vvmaxErr[vvmax > 0 & sm_mids >= Mdust_lim], 
           func = double_schechter, 
           prior = function(p){
             sum(
-              # dnorm(p[1], x = 8.0, sd = 8, log = TRUE),
-              # dnorm(p[2], x = -1.0, sd = 8, log = TRUE),
-              # dnorm(p[3], x = -1.0, sd = 8, log = TRUE),
-              # dnorm(p[4], x = -2.0, sd = 8, log = TRUE),
-              # dnorm(p[5], x = -3.0, sd = 8, log = TRUE),
+              dnorm(p[1], x = 8.0, sd = 4.0, log = TRUE),
+              dnorm(p[2], x = -1.0, sd = 1.0, log = TRUE),
+              dnorm(p[3], x = -1.0, sd = 1.0, log = TRUE),
+              dnorm(p[4], x = -2.0, sd = 4.0, log = TRUE),
+              dnorm(p[5], x = -3.0, sd = 4.0, log = TRUE),
               0
             )
           }
@@ -314,7 +316,7 @@ smf_mc_err = foreach(i = 1:(length(zbins)-1), .errorhandling = "pass") %do% {
   # devils_err = devils_err/(log(10) * devils_x)
   # devils_x = log10(devils_x)
   
-  temp = foreach(j = 1:100, .combine = rbind, .errorhandling = "remove") %do% {
+  temp = foreach(j = 1:500, .combine = rbind, .errorhandling = "remove") %do% {
     set.seed(j)
     gama_samples_ = rnorm(n = length(gama_x), mean = gama_x, sd = gama_err)
     
@@ -389,7 +391,7 @@ dmf_mc_err = foreach(i = 1:(length(zbins)-1), .errorhandling = "pass") %do% {
   # devils_err = devils_err/(log(10) * devils_x)
   # devils_x = log10(devils_x)
   
-  temp = foreach(j = 1:100, .combine = rbind, .errorhandling = "remove") %do% {
+  temp = foreach(j = 1:500, .combine = rbind, .errorhandling = "remove") %do% {
     set.seed(j)
     gama_samples_ = rnorm(n = length(gama_x), mean = gama_x, sd = gama_err)
     
@@ -464,7 +466,7 @@ dmf_wAGN_mc_err = foreach(i = 1:(length(zbins)-1), .errorhandling = "pass") %do%
   # devils_err = devils_err/(log(10) * devils_x)
   # devils_x = log10(devils_x)
   
-  temp = foreach(j = 1:100, .combine = rbind, .errorhandling = "remove") %do% {
+  temp = foreach(j = 1:500, .combine = rbind, .errorhandling = "remove") %do% {
     set.seed(j)
     gama_samples_ = rnorm(n = length(gama_x), mean = gama_x, sd = gama_err)
     
@@ -765,6 +767,13 @@ dust_mass_density_wAGN = foreach(i = 1:(length(zbins)-1)) %do% {
   return(fit)
 }
 
+for(i in 1:10000){
+  tryCatch(
+    dev.off(),
+    error = function(e){NULL}
+  )
+}
+
 gc()
 csmh = data.frame(foreach(i = 1:length(stellar_mass_density), .combine = bind_rows) %do% {
   stellar_mass_density[[i]]$cosmic
@@ -776,38 +785,75 @@ cdmh_wAGN = data.frame(foreach(i = 1:length(dust_mass_density_wAGN), .combine = 
   dust_mass_density_wAGN[[i]]$cosmic
 })
 
-fit_par = foreach(i = 1:length(dust_mass_density), .combine = rbind) %do% {
+names_par = c("M", "alpha", "beta", "phi1", "phi2")
+names_par_err = paste0(names_par, "Err")
+dmf_par = data.frame(foreach(i = 1:length(dust_mass_density), .combine = rbind) %do% {
   temp = colQuantiles(dust_mass_density[[i]]$highout$LD_last$Posterior1, probs = c(0.5, 0.16, 0.84))
-  # temp[,4] = temp[,1] - temp[,2]
-  # temp[,5] = temp[,3] - temp[,1]
-  # 
-  # cbind(
-  #   t(temp[,1]), t(0.5 * (temp[,3] - temp[,2]))
-  # )
+  cbind(
+    t(temp[,1])
+  )
+})
+dmf_par_err = data.frame(foreach(i = 1:length(dust_mass_density), .combine = rbind) %do% {
+  temp = colQuantiles(dust_mass_density[[i]]$highout$LD_last$Posterior1, probs = c(0.5, 0.16, 0.84))
   cbind(
     t(0.5 * (temp[,3] - temp[,2]))
   )
+})
+dmf_wAGN_par = data.frame(foreach(i = 1:length(dust_mass_density_wAGN), .combine = rbind) %do% {
+  temp = colQuantiles(dust_mass_density_wAGN[[i]]$highout$LD_last$Posterior1, probs = c(0.5, 0.16, 0.84))
+  cbind(
+    t(temp[,1])
+  )
+})
+dmf_wAGN_par_err = data.frame(foreach(i = 1:length(dust_mass_density_wAGN), .combine = rbind) %do% {
+  temp = colQuantiles(dust_mass_density_wAGN[[i]]$highout$LD_last$Posterior1, probs = c(0.5, 0.16, 0.84))
+  cbind(
+    t(0.5 * (temp[,3] - temp[,2]))
+  )
+})
+smf_par = data.frame(foreach(i = 1:length(stellar_mass_density), .combine = rbind) %do% {
+  temp = colQuantiles(stellar_mass_density[[i]]$highout$LD_last$Posterior1, probs = c(0.5, 0.16, 0.84))
+  cbind(
+    t(temp[,1])
+  )
+})
+smf_par_err = data.frame(foreach(i = 1:length(stellar_mass_density), .combine = rbind) %do% {
+  temp = colQuantiles(stellar_mass_density[[i]]$highout$LD_last$Posterior1, probs = c(0.5, 0.16, 0.84))
+  cbind(
+    t(0.5 * (temp[,3] - temp[,2]))
+  )
+})
+names(dmf_par) = names_par
+names(dmf_wAGN_par) = names_par
+names(smf_par) = names_par
+names(dmf_par_err) = names_par_err
+names(dmf_wAGN_par_err) = names_par_err
+names(smf_par_err) = names_par_err
 
-}
+dmf_par = data.frame(cbind(dmf_par, dmf_par_err))
+dmf_wAGN_par = data.frame(cbind(dmf_wAGN_par, dmf_wAGN_par_err))
+smf_par = data.frame(cbind(smf_par, smf_par_err))
 
 dsilva25 = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/csfh/DSilva25_CSFH_CAGNH_fit.csv"))
 dsilva_csmh_func = approxfun(
-  cosdistTravelTime(dsilva25$z, ref = "Planck18"), 
+  dsilva25$z, 
   10^dsilva25$CSMHQ50
 )
 LL_csmh = function(p){
   
   -1*sum(dnorm(
     x = log10( csmh$Q50 ),
-    mean = p[1] + log10(dsilva_csmh_func(lbt_mids)),
+    mean = p[1] + log10(dsilva_csmh_func(zmids)),
     sd = csmh$ERR/(log(10) * csmh$Q50), 
     log = TRUE
   ))
   
 }
+
 norm_csmh = optimise(f = LL_csmh, interval = c(-2,1))
 
-LSS_corr = dsilva_csmh_func(lbt_mids) / csmh$Q50 * 10^norm_csmh$minimum
+LSS_corr =dsilva_csmh_func(zmids) / csmh$Q50 * 10^norm_csmh$minimum
+LSS_corr[lbt_mids >= 8] = 1.0
 
 h5file = '~/Documents/DustMassDensity/data/all_data.h5'
 
@@ -887,6 +933,24 @@ for(i in 1:length(dust_mass_density_wAGN)){
   )
 }
 
+h5delete(h5file, "par")
+h5createGroup(h5file, "par")
+h5write(
+  obj = dmf_par, 
+  file = h5file,
+  name = "par/DMF"
+)
+h5write(
+  obj = dmf_wAGN_par, 
+  file = h5file,
+  name = "par/DMFwAGN"
+)
+h5write(
+  obj = smf_par, 
+  file = h5file,
+  name = "par/SMF"
+)
+
 ## Dust mass density
 driver18_cdmh_raw = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/cdmh/driver18_raw.csv", skip = 3))
 driver18_cdmh = data.frame(
@@ -903,3 +967,7 @@ driver18_cdmh$err_AGN = sqrt( (10^driver18_cdmh$cdmh * log(10) * driver18_cdmh$e
 driver18_cdmh$err = sqrt( driver18_cdmh$err_pois^2 + driver18_cdmh$err_cv^2 + driver18_cdmh$err_AGN^2 )
 driver18_cdmh$cdmh = 10^driver18_cdmh$cdmh
 fwrite(driver18_cdmh, "~/Documents/DustMassDensity/data/literature_evo/cdmh/driver18.csv")
+
+save.image(
+  "~/Documents/DustMassDensity/data/gama_devils_dust_mass.Rdata"
+)
