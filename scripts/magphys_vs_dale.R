@@ -25,6 +25,7 @@ set.seed(666)
 
 waveout = 10^seq(1, 9.35, 0.001)
 totSED = ProSpectSED(z = 0, ref = "Planck18", waveout = log10(waveout), Dale = Dale_NormTot, Dale_M2L_func = Dale_M2L_func)
+totSED_prior = ProSpectSED(z = 0, ref = "Planck18", waveout = log10(waveout), Dale = Dale_NormTot, Dale_M2L_func = Dale_M2L_func, alpha_SF_birth = 2, alpha_SF_screen = 2, tau_birth = 10^-0.2, tau_screen = 10^-2.3)
 # plot(totSED)
 
 ## PAH emission template from Madden+06 of a photodissociation region in the MW
@@ -35,25 +36,25 @@ m17_approx[m17_approx < 0] = 0
 # m17_approx = approx(x = c(m17_pdr_pah$mu*1e4), y = c(m17_pdr_pah$flux), xout = waveout, yleft = 0, yright = 0)$y
 Florentzian = (1 + ((waveout/1e8)^-1 - 3039.1)^2/(19.4)^2)^-1 * approx(x = waveout/1e4, y = m17_approx, xout = 11.3)$y * 0.1
 
-magplot(
-  waveout/1e4,
-  m17_approx,
-  log = "xy",
-  type = "l",
-  xlim = c(1, 20),
-  ylim = c(1e-6, 1)
-)
-points(
-  m17_pdr_pah$mu, 
-  m17_pdr_pah$flux,
-  pch = 16, col = "red"
-)
-lines(
-  waveout/1e4, Florentzian, col = "blue"
-)
-lines(
-  waveout/1e4, Florentzian + m17_approx, col = "green"
-)
+# magplot(
+#   waveout/1e4,
+#   m17_approx,
+#   log = "xy",
+#   type = "l",
+#   xlim = c(1, 20),
+#   ylim = c(1e-6, 1)
+# )
+# points(
+#   m17_pdr_pah$mu, 
+#   m17_pdr_pah$flux,
+#   pch = 16, col = "red"
+# )
+# lines(
+#   waveout/1e4, Florentzian, col = "blue"
+# )
+# lines(
+#   waveout/1e4, Florentzian + m17_approx, col = "green"
+# )
 
 PAH_emission_lines = (Florentzian + m17_approx) / waveout^2 ## Flambda
 PAH_emission_lines = PAH_emission_lines / trapz(x = waveout, y = PAH_emission_lines)
@@ -73,26 +74,25 @@ PAH_total = PAH_total / trapz(waveout, PAH_total)
 m17_norm = approxfun(x = waveout, y = PAH_total, yleft = 0, yright = 0)
 m17_norm = splinefun(x = waveout, y = PAH_total)
 
-magplot(
-  waveout/1e4, 
-  PAH_emission_lines * waveout, 
-  log = "xy",
-  type = "l",
-  xlim = c(1, 20),
-  col = "blue"
-  # ylim= c(1e-6, 1)
-)
-lines(
-  waveout/1e4, grey_continuum_scaled*waveout, col = "red"
-)
-lines(
-  waveout/1e4, waveout*m17_norm(waveout), col = "black"
-)
+# magplot(
+#   waveout/1e4, 
+#   PAH_emission_lines * waveout, 
+#   log = "xy",
+#   type = "l",
+#   xlim = c(1, 20),
+#   col = "blue"
+#   # ylim= c(1e-6, 1)
+# )
+# lines(
+#   waveout/1e4, grey_continuum_scaled*waveout, col = "red"
+# )
+# lines(
+#   waveout/1e4, waveout*m17_norm(waveout), col = "black"
+# )
 
 l_MIR = function(wave){
   2.000002^-1 * (greybody_norm(wave, Temp = 130, beta = 1.5) + greybody_norm(wave, Temp = 250, beta = 1.5))
 }
-
 
 ## Note that the greybody calculation for the dust mass already has 4pi factor in it as per the ProSpect equations...
 L_BC = function(wave, p){
@@ -168,9 +168,51 @@ p = c(
 )
 names_magphys = names(p)
 
+## Draw parameters from fits?
+# magphys_cat = Rfits_read_table("~/Documents/DustMassDensity/data/GAMA/MagPhysv06.fits")
+# devilsd10_noAGN = readRDS(paste0(catalogueDir, 'DEVILS_D10ProSpectCat_02_02_2021_v0.3.rds')) #catalogue that Jess done without AGN contribution
+# devilsd10_noAGN = devilsd10_noAGN$cat
+
+sample_from_distribution = function(Niters, data, xmin, xmax){
+  hh = maghist(
+    x = data, 
+    xlim = c(xmin, xmax), 
+    freq = FALSE
+  )
+  
+  draws = approx(
+    x = cumtrapz(
+      x = hh$mids, 
+      y = hh$density
+    ),
+    y = hh$mids, 
+    xout = runif(n = Niters, min = 0.0, max = 1.0), 
+    rule = 2
+  )$y
+  
+  maghist(
+    draws, freq = FALSE, breaks = hh$breaks, col = alpha("red", 0.4), add = TRUE
+  )
+  return(draws)
+}
+
 Niters = 1000
-alpha_birth_samples = runif(Niters, 0, 4)
-alpha_screen_samples = runif(Niters, 0, 4)
+# alpha_birth_samples = pmin(pmax(rnorm(Niters, mean = 2, sd = 1), 0) ,4)
+# alpha_screen_samples = pmin(pmax(rnorm(Niters, mean = 2, sd = 1), 0) ,4)
+# tau_birth_samples = pmin(pmax(rnorm(Niters, mean = -0.2, sd = 0.5), -2.5), 1.5)
+# tau_screen_prior = approxfun(
+#   cumtrapz(
+#     x = seq(-5.0, 1.0, 0.01),
+#     y = -20 * erf(seq(-5.0, 1.0, 0.01)-2)
+#   )/118.9949,
+#   seq(-5.0, 1.0, 0.01)
+# )
+# tau_screen_samples = pmin(pmax(tau_screen_prior(runif(n = Niters, min = 0.0, max = 1.0)),-5.0), 1.0)
+
+alpha_birth_samples = runif(Niters, 0.0, 4.0)
+alpha_screen_samples = runif(Niters, 0.0, 4.0)
+tau_birth_samples = runif(Niters, -2.5, 1.5)
+tau_screen_samples = runif(Niters, -5.0, 1.0)
 prospect_dale_samples = foreach(i = 1:Niters) %do% {
   if(i %% 100 == 0){
     message(i)
@@ -183,6 +225,8 @@ prospect_dale_samples = foreach(i = 1:Niters) %do% {
     Dale_M2L_func = Dale_M2L_func,
     alpha_SF_birth = alpha_birth_samples[i],
     alpha_SF_screen = alpha_screen_samples[i],
+    tau_birth = 10^tau_birth_samples[i],
+    tau_screen = 10^tau_screen_samples[i]
   )
   
   df = list(
@@ -193,142 +237,6 @@ prospect_dale_samples = foreach(i = 1:Niters) %do% {
   )
   return(df)
 }
-
-magphys_parm_mat = matrix(data = 0L, nrow = length(p)-1, ncol = Niters)
-for(i in 1:Niters){
-  
-  frac_BC = runif(1, 0, 1)
-  xi_W_BC_sample = runif(1, 0, 1.0)
-  xi_MIR_BC_sample = (1-xi_W_BC_sample) * frac_BC
-  xi_PAH_BC_sample = (1-xi_W_BC_sample) * (1-frac_BC)
-  magphys_parm_mat[,i] = c(
-    runif(1, 0, 1),
-    xi_PAH_BC_sample,
-    xi_MIR_BC_sample,
-    xi_W_BC_sample,
-    runif(1, 0, 1),
-    runif(1, 10, 100),
-    runif(1, 10, 100)
-  )
-  
-  # frac_BC = 10^runif(1, -4, 0)
-  # xi_W_BC_sample = 10^runif(1, -4, 0)
-  # xi_MIR_BC_sample = (1-xi_W_BC_sample) * frac_BC
-  # xi_PAH_BC_sample = (1-xi_W_BC_sample) * (1-frac_BC)
-  # magphys_parm_mat[,i] = c(
-  #   10^runif(1, -4, 0),
-  #   xi_PAH_BC_sample,
-  #   xi_MIR_BC_sample,
-  #   xi_W_BC_sample,
-  #   10^runif(1, -4, 0),
-  #   10^runif(1, 1, 2),
-  #   10^runif(1, 1, 2)
-  # )
-}
-magphys_dust_lum = foreach(i = 1:Niters) %do% {
-  if(i %% 100 == 0){message(i)}
-  magphys_parm = c(unname(totSED$dustlum["total"]), magphys_parm_mat[,i])
-  names(magphys_parm) = names(p)
-  magphys_lum = L_dust(totSED$DustEmit$wave, p = magphys_parm)
-}
-
-par(mar = c(2.5, 2.5, 1.5, 1.5), oma = rep(1.5, 4), family = "DejaVu Sans", cex = 2.0)
-magplot(
-  NA,
-  type = "l", 
-  log = "xy",
-  lwd = 3,
-  xlim = c(1e3, 1e7),
-  ylim = c(1e7, 3e10),
-  xlab = "Wavelength [Ang]",
-  ylab = "Lum [𝐿⊙ / Ang]",
-  grid = FALSE, 
-  cex.lab = 2.0
-)
-for(i in 1:length(prospect_dale_samples)){
-  lines(
-    prospect_dale_samples[[i]]$wave,
-    prospect_dale_samples[[i]]$lum * prospect_dale_samples[[i]]$wave,
-    col = alpha("darkorange", 0.1)
-  )
-}
-for(i in 1:Niters){
-  lines(
-    magphys_dust_lum[[i]]$wave, 
-    magphys_dust_lum[[i]]$wave * magphys_dust_lum[[i]]$Ltot, 
-    col = alpha("darkred", 0.1),
-    lwd = 1, lty = 1.0
-  )
-}
-legend(
-  x = "topleft",
-  legend = c("Dale samples", "Magphys samples"),
-  lwd = 2,
-  lty = c(1,1),
-  col = c("darkorange", "darkred")
-)
-
-magphys_standard =  L_dust(totSED$DustEmit$wave, p = p)
-magplot(
-  totSED$FinalLum$wave, totSED$FinalLum$lum * totSED$FinalLum$wave, 
-  type = "l", 
-  log = "xy",
-  lwd = 3,
-  xlim = c(1e2, 1e7),
-  ylim = c(1e7, 3e10),
-  xlab = "Wavelength [Ang]",
-  ylab = "Lum [Lsun / Ang]"
-)
-lines(
-  totSED$DustEmit$wave, totSED$DustEmit$lum * totSED$DustEmit$wave,
-  col = alpha("darkorange", 0.8),
-  lwd = 5
-)
-lines(
-  totSED$DustEmit$wave, magphys_standard$Ltot * totSED$DustEmit$wave,
-  col = alpha("darkred", 0.8),
-  lwd = 5
-)
-lines(
-  totSED$DustEmit$wave, magphys_standard$BC$Ltot * totSED$DustEmit$wave,
-  col = alpha("darkred", 0.8),
-  lwd = 3, lty = 2
-)
-lines(
-  totSED$DustEmit$wave, magphys_standard$ISM$Ltot * totSED$DustEmit$wave,
-  col = alpha("darkred", 0.8),
-  lwd = 3, lty = 3
-)
-lines(
-  totSED$DustEmit$wave, magphys_standard$ISM$PAH * totSED$DustEmit$wave,
-  col = alpha("red", 0.8),
-  lwd = 3, lty = 3
-)
-lines(
-  totSED$DustEmit$wave, magphys_standard$ISM$WISM * totSED$DustEmit$wave,
-  col = alpha("red", 0.8),
-  lwd = 3, lty = 3
-)
-lines(
-  totSED$DustEmit$wave, magphys_standard$BC$WBC * totSED$DustEmit$wave,
-  col = alpha("red", 0.8),
-  lwd = 3, lty = 3
-)
-legend(
-  x = "topleft",
-  legend = c("Final lum", "Dale from ProSpect", "Reproduce magphys", "Magphys BC", "Magphys ISM"),
-  lwd = 2,
-  lty = c(1,1,1,2,3),
-  col = c("black", "darkorange", "darkred", "darkred", "darkred")
-)
-
-dale_spec_samples = as.matrix(foreach(i = 1:Niters, .combine = rbind) %do% {
-  prospect_dale_samples[[i]]$lum 
-})
-magphys_spec_samples = as.matrix(foreach(i = 1:Niters, .combine = rbind) %do% {
-  magphys_dust_lum[[i]]$Ltot 
-})
-
 dale_dust_lum_samples = sapply(prospect_dale_samples, function(x)unname(x$dustlum["total"]))
 dale_dust_lum_birth_samples = sapply(prospect_dale_samples, function(x)unname(x$dustlum["birth"]))
 dale_dust_lum_screen_samples = sapply(prospect_dale_samples, function(x)unname(x$dustlum["screen"]))
@@ -337,10 +245,83 @@ dale_dust_mass_birth_samples = sapply(prospect_dale_samples, function(x)unname(x
 dale_dust_mass_screen_samples = sapply(prospect_dale_samples, function(x)unname(x$dustmass['screen']))
 dale_FIR_samples = sapply(prospect_dale_samples, function(x)trapz(x$wave[x$wave>2e5], x$lum[x$wave>2e5]))
 
+## Draw parameters as per the magphys paper to construct the 50k models library
+magphys_parm_mat = matrix(data = 0L, nrow = length(p)-1, ncol = Niters)
+for(i in 1:Niters){
+  
+  frac_BC = runif(1, 0, 1)
+  
+  xi_W_BC_sample = runif(1, 0, 1.0)
+  xi_MIR_BC_sample = runif(1, 0, 1.0-xi_W_BC_sample)
+  xi_PAH_BC_sample = 1.0 - xi_W_BC_sample - xi_MIR_BC_sample
+
+  magphys_parm_mat[,i] = c(
+    runif(1, 0, 1),
+    xi_PAH_BC_sample,
+    xi_MIR_BC_sample,
+    xi_W_BC_sample,
+    runif(1, 0.5, 1),
+    runif(1, 30, 60),
+    runif(1, 15, 25)
+  )
+}
+magphys_dust_lum = foreach(i = 1:Niters) %do% {
+  if(i %% 100 == 0){message(i)}
+  magphys_parm = c(dale_dust_lum_samples[i], magphys_parm_mat[,i])
+  names(magphys_parm) = names(p)
+  magphys_lum = L_dust(totSED$DustEmit$wave, p = magphys_parm)
+}
 magphys_dust_lum_samples = sapply(magphys_dust_lum, function(x)trapz(x$wave, x$Ltot))
-magphys_dust_lum_no_PAH_samples = sapply(magphys_dust_lum, function(x){trapz(x$wave, x$BC$WBC) + trapz(x$wave, x$ISM$WISM) + trapz(x$wave, x$ISM$CISM)})
+magphys_dust_lum_Mass_samples = sapply(magphys_dust_lum, function(x){trapz(x$wave, x$BC$WBC) + trapz(x$wave, x$ISM$WISM) + trapz(x$wave, x$ISM$CISM)})
+magphys_dust_lum_MassBC_samples = sapply(magphys_dust_lum, function(x){trapz(x$wave, x$BC$WBC)})
+magphys_dust_lum_BCtot_samples = sapply(magphys_dust_lum, function(x){trapz(x$wave, x$BC$Ltot)})
+magphys_dust_lum_MassISM_samples = sapply(magphys_dust_lum, function(x){trapz(x$wave, x$ISM$WISM) + trapz(x$wave, x$ISM$CISM)})
+magphys_dust_lum_ISMtot_samples = sapply(magphys_dust_lum, function(x){trapz(x$wave, x$ISM$Ltot)})
 magphys_dust_mass_samples = sapply(magphys_dust_lum,  function(x)unname(x$Mdust))
 magphys_FIR_samples = sapply(magphys_dust_lum, function(x)trapz(x$wave[x$wave>2e5], x$Ltot[x$wave>2e5]))
+
+magphys_standard =  L_dust(totSED$DustEmit$wave, p = p)
+
+magphys_Mass_contribution = approxfun(
+  totSED$DustEmit$wave,
+  (magphys_standard$BC$WBC+magphys_standard$ISM$WISM+magphys_standard$ISM$CISM) /  (magphys_standard$Ltot),
+  rule = 2
+)
+
+Dale_M2L_new = sapply(1:64, function(i){
+  Msol = 1.989e30
+  mH = 1.674e-27
+  Lsol = 3.828e26
+  DTH = 0.0073
+  qPAH = 0.14
+  weight = pmin(pmax(magphys_Mass_contribution(Dale_Orig$Wave), qPAH), 1-qPAH)
+  weight[Dale_Orig$Wave > 1e7] = 1-qPAH
+  foo = Dale_Orig$Aspec[[1]][i,] * Msol/mH/Lsol/(DTH*weight)/Dale_Orig$Wave
+  sum(
+    c(0, diff(Dale_Orig$Wave)) * foo
+  )
+  # trapz(
+  #   Dale_Orig$Wave,
+  #   foo
+  # )
+})
+Dale_M2L_func_new = approxfun(
+  Dale_M2L$alpha_SF, Dale_M2L_new, rule = 2
+)
+
+dale_mass_birth_corr = dale_dust_lum_birth_samples/Dale_M2L_func_new(alpha_birth_samples)
+dale_mass_screen_corr = dale_dust_lum_screen_samples/Dale_M2L_func_new(alpha_screen_samples)
+dale_mass = dale_mass_screen_corr + dale_mass_birth_corr
+
+dale_spec_samples = as.matrix(foreach(i = 1:Niters, .combine = rbind) %do% {
+  prospect_dale_samples[[i]]$lum 
+})
+magphys_spec_samples = as.matrix(foreach(i = 1:Niters, .combine = rbind) %do% {
+  magphys_dust_lum[[i]]$Ltot 
+})
+
+Md_corr = median(dale_dust_mass_samples/dale_mass)
+message("Average factor of difference? = ", Md_corr, sep = " ")
 
 df_samples = data.frame(
   "DaleLum" = dale_dust_lum_samples,
@@ -351,13 +332,10 @@ df_samples = data.frame(
   "DaleMdustISM" = dale_dust_mass_screen_samples,
   "DaleFIR" = dale_FIR_samples,
   "MagphysLum" = magphys_dust_lum_samples,
-  "MagphysLumNoPAH" = magphys_dust_lum_no_PAH_samples,
+  "MagphysLumMass" = magphys_dust_lum_Mass_samples,
   "MagphysMdust" = magphys_dust_mass_samples,
   "MagphysFIR" = magphys_FIR_samples
 )
-
-Md_corr = (median(dale_FIR_samples / magphys_FIR_samples) * median(magphys_dust_lum_samples / magphys_dust_lum_no_PAH_samples))
-message("Average factor of difference? = ", Md_corr)
 
 spec_samples = data.frame(
   "wave" = unname(prospect_dale_samples[[1]]$wave), 
@@ -375,7 +353,8 @@ spec_samples = data.frame(
 
 spec_standard = data.frame(
   "wave" = totSED$DustEmit$wave,
-  "Dale" = totSED$DustEmit$lum,
+  "DaleDefault" = totSED$DustEmit$lum,
+  "Dale" = totSED_prior$DustEmit$lum,
   "Magphys" = magphys_standard$Ltot,
   "MagphysBC" = magphys_standard$BC$Ltot,
   "MagphysISM" = magphys_standard$ISM$Ltot,
@@ -391,40 +370,17 @@ spec_standard = data.frame(
 h5file = '~/Documents/DustMassDensity/data/all_data.h5'
 h5delete(h5file, "DaleMagphys")
 h5createGroup(h5file, "DaleMagphys")
-h5write(obj = Md_corr, file = h5file, name = 'Md_corr')
+h5delete(h5file, "Md_corr")
+h5write(obj = unname(Md_corr), file = h5file, name = 'Md_corr')
 h5write(
   obj = df_samples, file = h5file, name = "DaleMagphys/Samples"
 )
 h5write(
   obj = spec_samples, file = h5file, name = "DaleMagphys/Spec"
 )
+# h5delete(h5file, "DaleMagphys/StandardSpec")
 h5write(
   obj = spec_standard, file = h5file, name = "DaleMagphys/StandardSpec"
-)
-
-
-maghist(
-  log10(dale_dust_mass_samples), seq(0.5, 8.5, 0.25), col = alpha("darkorange", 0.5), log = "y", ylim = c(1,500), 
-  ylab = "Frequency", xlab = "log10(Dust mass/Msun)"
-)
-maghist(
-  log10(dale_dust_mass_birth_samples), seq(3.5, 8.5, 0.25), col = alpha("green", 0.5), log = "y", ylim = c(1,150), add = TRUE,
-  ylab = "Frequency", xlab = "log10(Dust mass/Msun)"
-)
-maghist(
-  log10(dale_dust_mass_screen_samples), seq(3.5, 8.5, 0.25), col = alpha("blue", 0.5), log = "y", ylim = c(1,150), add = TRUE,
-  ylab = "Frequency", xlab = "log10(Dust mass/Msun)"
-)
-maghist(
-  log10(magphys_dust_mass_samples), seq(3.5, 8.5, 0.25), add = TRUE, col = alpha("darkred", 0.5), log = "y", ylim = c(1,150)
-)
-legend(
-  x = "topleft",
-  legend = c("Dale", "Magphys"),
-  lwd = 5,
-  lty = c(1,1),
-  col = c(alpha("darkorange", 0.5), alpha("darkred", 0.5)),
-  cex = 1.5
 )
 
 simonMagphys = h5read(file = h5file, name = "Photometry/FinalSample")
@@ -456,3 +412,7 @@ simonCompare = foreach(kk = 1:dim(simonMagphys)[1], .combine = rbind) %do% {
 ## Confirmed that the magphys has been pretty much reproduced
 maghist(unlist(simonCompare[,1]) - unlist(simonCompare[,2]))
 maghist(unlist(simonCompare[,3]) - unlist(simonCompare[,4]))
+
+save.image(
+  file = "~/Documents/DustMassDensity/data/magphys_vs_dale.Rdata"
+)

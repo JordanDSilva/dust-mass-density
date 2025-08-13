@@ -13,6 +13,8 @@ library(matrixStats)
 library(stringr)
 library(rhdf5)
 
+## Compute some stuff for the HII mass and the gas mass 
+
 set.seed(666)
 
 speedOfLight = 299792458 ##m/s
@@ -171,7 +173,7 @@ cosmic_SEDs = function(cosmo_grid, params, cores, evo = evol_fits, do_quantile =
       y = mSFR,
       yleft = 0, yright = 0
     )
-    tempZ = Zfunc_massmap_box(
+    tempZ = Zfunc_massmap_lin(
       age = 1e9*(AgeOfUniverse - UniAge),
       Zstart = Zstart,
       Zfinal = Zfinal,
@@ -226,10 +228,7 @@ cosmic_SEDs = function(cosmo_grid, params, cores, evo = evol_fits, do_quantile =
       
       fiducial_SED = ProSpectSED(
         
-        ref = "737",
-        H0 = 70,
-        OmegaM = 0.3,
-        OmegaL = 0.7,
+        ref = "Planck18",
         z = z,
         LumDist_Mpc = LumDist[i],
         agemax = UniAge[i]*1e9,
@@ -262,7 +261,11 @@ cosmic_SEDs = function(cosmo_grid, params, cores, evo = evol_fits, do_quantile =
         
         Z = tempZHappx,
         waveout = seq(1, 9.35, by = 0.01),
+        SMstar = TRUE
       )
+      ZGasMass = fiducial_SED$Stars$SMstar["TotSMform"] * fiducial_SED$Stars$Zvec[1] * exp(-1*(fiducial_SED$Stars$Zvec[1] - 1e-4)/0.03)
+      NeutralMass = ZGasMass/fiducial_SED$Stars$Zvec[1] - ZGasMass
+      Metallicity = fiducial_SED$Stars$Zvec[1]
       # par(bg = "grey")
       # magplot(fiducial_SED$FinalLum, xlim = c(10, 1e4), ylim = 10^c(1, 7), log = "xy", type = "l", lwd = 5)
       # lines(fiducial_SED$StarsUnAtten, col = "blue", lty = 2, lwd = 3)
@@ -272,7 +275,10 @@ cosmic_SEDs = function(cosmo_grid, params, cores, evo = evol_fits, do_quantile =
       names_dff = c(
         paste0("TotSED", qq),
         paste0("StarsSED",qq),
-        paste0("AGNSED",qq)
+        paste0("AGNSED",qq),
+        paste0("ZGasMass", qq),
+        paste0("NeutralMass", qq),
+        paste0("Metallicity", qq)
       )
       if(AGN_escape_frac == 0){
         fiducial_SED$AGN = list(
@@ -292,7 +298,10 @@ cosmic_SEDs = function(cosmo_grid, params, cores, evo = evol_fits, do_quantile =
       yy = list(
         fiducial_SED$FinalLum,
         fiducial_SED$StarsAtten,
-        fiducial_SED$AGN
+        fiducial_SED$AGN,
+        ZGasMass,
+        NeutralMass,
+        Metallicity
       )
       names(yy) = names_dff
       yy
@@ -317,6 +326,10 @@ cosmic_SEDs = function(cosmo_grid, params, cores, evo = evol_fits, do_quantile =
   TotWavelength = df[[1]]$TotSED50$wave  
   StarsWavelength = df[[1]]$StarsSED50$wave
   AGNWavelength = df[[1]]$AGNSED50$wave
+  
+  ZGasMassQ50 = unname(unlist(sapply(df[,1], function(x)x$ZGasMass50)))
+  NeutralMassQ50 = unname(unlist(sapply(df[,1], function(x)x$NeutralMass50)))
+  MetallicityQ50 = unname(unlist(sapply(df[,1], function(x)x$Metallicity50)))
   
   ## Lyc 
   tot_nion = foreach(i = 1:length(zgrid), .combine = 'c') %do% {
@@ -381,7 +394,11 @@ cosmic_SEDs = function(cosmo_grid, params, cores, evo = evol_fits, do_quantile =
     
     "UVTotalQ50" = tot_UV,
     "UVStellarQ50" = stars_UV,
-    "UVAGNQ50" = agn_UV
+    "UVAGNQ50" = agn_UV,
+    
+    "ZGasMassQ50" = ZGasMassQ50,
+    "NeutralMassQ50" = NeutralMassQ50,
+    "MetallicityQ50" = MetallicityQ50
   )
   
   if(do_quantile){
@@ -486,6 +503,15 @@ cosmic_SEDs = function(cosmo_grid, params, cores, evo = evol_fits, do_quantile =
                  z = 0, ref = "737") *  4*pi*(10 * 3.086e18)^2
     }
     
+    ZGasMassQ16 = unname(unlist(sapply(df[,2], function(x)x$ZGasMass16)))
+    ZGasMassQ84 = unname(unlist(sapply(df[,3], function(x)x$ZGasMass84)))
+    
+    NeutralMassQ16 = unname(unlist(sapply(df[,2], function(x)x$NeutralMass16)))
+    NeutralMassQ84 = unname(unlist(sapply(df[,3], function(x)x$NeutralMass84)))
+    
+    MetallicityQ16 = unname(unlist(sapply(df[,2], function(x)x$Metallicity16)))
+    MetallicityQ84 = unname(unlist(sapply(df[,3], function(x)x$Metallicity84)))
+    
     return_$TotSEDQ16 = TotSEDQ16
     return_$StarsSEDQ16 = StarsSEDQ16
     return_$AGNSEDQ16 = AGNSEDQ16
@@ -509,6 +535,15 @@ cosmic_SEDs = function(cosmo_grid, params, cores, evo = evol_fits, do_quantile =
     return_$UVTotalQ84 = tot_UV84
     return_$UVStarsQ84 = stars_UV84
     return_$UVAGNQ84 = agn_UV84
+    
+    return_$ZGasMassQ16 = ZGasMassQ16
+    return_$ZGasMassQ84 = ZGasMassQ84
+    
+    return_$NeutralMassQ16 = NeutralMassQ16
+    return_$NeutralMassQ84 = NeutralMassQ84
+    
+    return_$MetallicityQ16 = MetallicityQ16
+    return_$MetallicityQ84 = MetallicityQ84
   }
   
   print(
@@ -566,4 +601,19 @@ df = data.frame(
 fwrite(
   df,
   "~/Documents/DustMassDensity/data/literature_evo/HIIDensity.csv"
+)
+
+dfGas = data.frame(
+  "z" = zgrid, 
+  "ZGasMassQ50" = AverageLyc$ZGasMassQ50,
+  "ZGasMassQ16" = AverageLyc$ZGasMassQ16,
+  "ZGasMassQ84" = AverageLyc$ZGasMassQ84,
+  "NeutralGasMassQ50" = AverageLyc$NeutralMassQ50,
+  "NeutralGasMassQ16" = AverageLyc$NeutralMassQ16,
+  "NeutralGasMassQ84" = AverageLyc$NeutralMassQ84,
+  "Metallicity" = AverageLyc$MetallicityQ50
+)
+fwrite(
+  dfGas,
+  "~/Documents/DustMassDensity/data/literature_evo/MetalGasDensity.csv"
 )
