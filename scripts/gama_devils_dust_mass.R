@@ -1325,246 +1325,6 @@ dust_mass_density_wAGN_no_corr = foreach(i = 1:(length(zbins)-1)) %do% {
   dev.off()
   return(fit)
 }
-dust_mass_density_wAGN_no_corr_noERR = foreach(i = 1:(length(zbins)-1)) %do% {
-  
-  # png(paste0("~/Documents/DustMassDensity/plots/dmf-AGN/lbt_",lbt_mids[i],".png"))
-  GAMA = compute_mass_function(
-    zlo = zbins[i],
-    zhi = zbins[i+1],
-    z = sort_match_AGN$z,
-    x = sort_match_AGN$dustmass.total,
-    x_err = 0.5 * (sort_match_AGN$dustmass.total_UB - sort_match_AGN$dustmass.total_LB),
-    areas = rep(217.54, length(sort_match_AGN$z)),
-    sm_bins = sm_bins,
-    errFloor = 0.0,
-    do_fit = FALSE,
-    do_plot = TRUE,
-    add = FALSE,
-    pt.col = "purple"
-  )
-  DEVILS = compute_mass_function(
-    zlo = zbins[i],
-    zhi = zbins[i+1],
-    z = devilsd10_AGN$z,
-    x = devilsd10_AGN$dustmass.total,
-    x_err = 0.5 * (devilsd10_AGN$dustmass.total_UB - devilsd10_AGN$dustmass.birth_LB),
-    areas = rep(1.5, length(devilsd10_AGN$z)),
-    sm_bins = sm_bins,
-    errFloor = 0.0,
-    do_fit = FALSE,
-    do_plot = TRUE,
-    add = TRUE,
-    pt.col = "cornflowerblue"
-  )
-  
-  vmax_combine = foreach(j = 1:(length(sm_bins)-1) , .combine = rbind) %do% {
-    
-    if( GAMA$vmax$vmaxErr[j] <= ifelse(DEVILS$vmax$vmaxErr[j]==0, 999, DEVILS$vmax$vmaxErr[j]) ){
-      if( !GAMA$vmax$mlim[j] ){
-        c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
-      }else{
-        if( (DEVILS$vmax$vmax[j] - GAMA$vmax$vmax[j])/(GAMA$vmax$vmaxErr[j] + 1e-323) > 5 ){
-          c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
-        }else{
-          c(GAMA$vmax$x[j], GAMA$vmax$vmax[j], GAMA$vmax$vmaxErr[j], GAMA$vmax$meanxErr[j])
-        }
-      }
-    }else{
-      c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
-    }
-    
-  }
-  
-  fit = compute_mass_function(
-    zlo = zbins[i],
-    zhi = zbins[i+1],
-    
-    ## Not gonna use these 
-    z = devilsd10_noAGN$z,
-    x = devilsd10_noAGN$dustmass.total,
-    x_err = 0.5 * (devilsd10_AGN$dustmass.total_UB - devilsd10_AGN$dustmass.birth_LB),
-    areas = devilsd10_noAGN$area,
-    
-    sm_bins = sm_bins,
-    vmax_bins = vmax_combine[,1],
-    vmax = vmax_combine[,2],
-    vmaxErr = sqrt( vmax_combine[,3]^2 ),
-    meanxErr = vmax_combine[,4],
-    errFloor = 0.1,
-    do_fit = TRUE,
-    do_plot = TRUE,
-    add = TRUE
-  )
-  fit$vmax$GAMA = GAMA$vmax$vmax
-  fit$vmax$DEVILS = DEVILS$vmax$vmax
-  points(
-    10^fit$vmax$x[fit$vmax$mlim == 1],
-    fit$vmax$vmax[fit$vmax$mlim == 1], 
-    pch = 16, col = "red"
-  )
-  dev.off()
-  return(fit)
-}
-dust_birth_mass_density_wAGN_no_corr_noERR = foreach(i = 1:(length(zbins)-1)) %do% {
-  
-  # png(paste0("~/Documents/DustMassDensity/plots/dmf-AGN/lbt_",lbt_mids[i],".png"))
-  GAMA = compute_mass_function(
-    zlo = zbins[i],
-    zhi = zbins[i+1],
-    z = sort_match_AGN$z,
-    x = sort_match_AGN$dustmass.birth,
-    x_err = 0.5 * (sort_match_AGN$dustmass.birth_UB - sort_match_AGN$dustmass.birth_LB),
-    areas = rep(217.54, length(sort_match_AGN$z)),
-    sm_bins = sm_bins,
-    errFloor = 0.0,
-    do_fit = FALSE,
-    do_plot = TRUE,
-    add = FALSE,
-    pt.col = "purple"
-  )
-  DEVILS = compute_mass_function(
-    zlo = zbins[i],
-    zhi = zbins[i+1],
-    z = devilsd10_AGN$z,
-    x = devilsd10_AGN$dustmass.birth,
-    x_err = 0.5 * (devilsd10_AGN$dustmass.birth_UB - devilsd10_AGN$dustmass.birth_LB),
-    areas = rep(1.5, length(devilsd10_AGN$z)),
-    sm_bins = sm_bins,
-    errFloor = 0.0,
-    do_fit = FALSE,
-    do_plot = TRUE,
-    add = TRUE,
-    pt.col = "cornflowerblue"
-  )
-  
-  vmax_combine = foreach(j = 1:(length(sm_bins)-1) , .combine = rbind) %do% {
-    
-    if( GAMA$vmax$vmaxErr[j] <= ifelse(DEVILS$vmax$vmaxErr[j]==0, 999, DEVILS$vmax$vmaxErr[j]) ){
-      if( !GAMA$vmax$mlim[j] ){
-        c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
-      }else{
-        if( (DEVILS$vmax$vmax[j] - GAMA$vmax$vmax[j])/(GAMA$vmax$vmaxErr[j] + 1e-323) > 5 ){
-          c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
-        }else{
-          c(GAMA$vmax$x[j], GAMA$vmax$vmax[j], GAMA$vmax$vmaxErr[j], GAMA$vmax$meanxErr[j])
-        }
-      }
-    }else{
-      c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
-    }
-    
-  }
-  
-  fit = compute_mass_function(
-    zlo = zbins[i],
-    zhi = zbins[i+1],
-    
-    ## Not gonna use these 
-    z = devilsd10_noAGN$z,
-    x = devilsd10_noAGN$dustmass.birth,
-    x_err = 0.5 * (devilsd10_AGN$dustmass.birth_UB - devilsd10_AGN$dustmass.birth_LB),
-    areas = devilsd10_noAGN$area,
-    
-    sm_bins = sm_bins,
-    vmax_bins = vmax_combine[,1],
-    vmax = vmax_combine[,2],
-    vmaxErr = sqrt( vmax_combine[,3]^2 ),
-    meanxErr = vmax_combine[,4],
-    errFloor = 0.1,
-    do_fit = TRUE,
-    do_plot = TRUE,
-    add = TRUE
-  )
-  fit$vmax$GAMA = GAMA$vmax$vmax
-  fit$vmax$DEVILS = DEVILS$vmax$vmax
-  points(
-    10^fit$vmax$x[fit$vmax$mlim == 1],
-    fit$vmax$vmax[fit$vmax$mlim == 1], 
-    pch = 16, col = "red"
-  )
-  dev.off()
-  return(fit)
-}
-dust_screen_mass_density_wAGN_no_corr_noERR = foreach(i = 1:(length(zbins)-1)) %do% {
-  
-  # png(paste0("~/Documents/DustMassDensity/plots/dmf-AGN/lbt_",lbt_mids[i],".png"))
-  GAMA = compute_mass_function(
-    zlo = zbins[i],
-    zhi = zbins[i+1],
-    z = sort_match_AGN$z,
-    x = sort_match_AGN$dustmass.screen,
-    x_err = 0.5 * (sort_match_AGN$dustmass.screen_UB - sort_match_AGN$dustmass.screen_LB),
-    areas = rep(217.54, length(sort_match_AGN$z)),
-    sm_bins = sm_bins,
-    errFloor = 0.0,
-    do_fit = FALSE,
-    do_plot = TRUE,
-    add = FALSE,
-    pt.col = "purple"
-  )
-  DEVILS = compute_mass_function(
-    zlo = zbins[i],
-    zhi = zbins[i+1],
-    z = devilsd10_AGN$z,
-    x = devilsd10_AGN$dustmass.screen,
-    x_err = 0.5 * (devilsd10_AGN$dustmass.screen_UB - devilsd10_AGN$dustmass.screen_LB),
-    areas = rep(1.5, length(devilsd10_AGN$z)),
-    sm_bins = sm_bins,
-    errFloor = 0.0,
-    do_fit = FALSE,
-    do_plot = TRUE,
-    add = TRUE,
-    pt.col = "cornflowerblue"
-  )
-  
-  vmax_combine = foreach(j = 1:(length(sm_bins)-1) , .combine = rbind) %do% {
-    
-    if( GAMA$vmax$vmaxErr[j] <= ifelse(DEVILS$vmax$vmaxErr[j]==0, 999, DEVILS$vmax$vmaxErr[j]) ){
-      if( !GAMA$vmax$mlim[j] ){
-        c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
-      }else{
-        if( (DEVILS$vmax$vmax[j] - GAMA$vmax$vmax[j])/(GAMA$vmax$vmaxErr[j] + 1e-323) > 5 ){
-          c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
-        }else{
-          c(GAMA$vmax$x[j], GAMA$vmax$vmax[j], GAMA$vmax$vmaxErr[j], GAMA$vmax$meanxErr[j])
-        }
-      }
-    }else{
-      c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
-    }
-    
-  }
-  
-  fit = compute_mass_function(
-    zlo = zbins[i],
-    zhi = zbins[i+1],
-    
-    ## Not gonna use these 
-    z = devilsd10_noAGN$z,
-    x = devilsd10_noAGN$dustmass.screen,
-    x_err = 0.5 * (devilsd10_AGN$dustmass.screen_UB - devilsd10_AGN$dustmass.screen_LB),
-    areas = devilsd10_noAGN$area,
-    
-    sm_bins = sm_bins,
-    vmax_bins = vmax_combine[,1],
-    vmax = vmax_combine[,2],
-    vmaxErr = sqrt( vmax_combine[,3]^2 ),
-    meanxErr = vmax_combine[,4],
-    errFloor = 0.1,
-    do_fit = TRUE,
-    do_plot = TRUE,
-    add = TRUE
-  )
-  fit$vmax$GAMA = GAMA$vmax$vmax
-  fit$vmax$DEVILS = DEVILS$vmax$vmax
-  points(
-    10^fit$vmax$x[fit$vmax$mlim == 1],
-    fit$vmax$vmax[fit$vmax$mlim == 1], 
-    pch = 16, col = "red"
-  )
-  dev.off()
-  return(fit)
-}
 
 gas_mass_density = foreach(i = 1:(length(zbins)-1)) %do% {
   
@@ -1749,15 +1509,15 @@ cdmh_wAGN = data.frame(foreach(i = 1:length(dust_mass_density_wAGN), .combine = 
 cdmh_wAGN_no_corr = data.frame(foreach(i = 1:length(dust_mass_density_wAGN_no_corr), .combine = bind_rows) %do% {
   dust_mass_density_wAGN_no_corr[[i]]$cosmic
 })
-cdmh_wAGN_no_corr_noERR = data.frame(foreach(i = 1:length(dust_mass_density_wAGN_no_corr_noERR), .combine = bind_rows) %do% {
-  dust_mass_density_wAGN_no_corr_noERR[[i]]$cosmic
-})
-cdmh_birth_wAGN_no_corr_noERR = data.frame(foreach(i = 1:length(dust_birth_mass_density_wAGN_no_corr_noERR), .combine = bind_rows) %do% {
-  dust_birth_mass_density_wAGN_no_corr_noERR[[i]]$cosmic
-})
-cdmh_screen_wAGN_no_corr_noERR = data.frame(foreach(i = 1:length(dust_screen_mass_density_wAGN_no_corr_noERR), .combine = bind_rows) %do% {
-  dust_screen_mass_density_wAGN_no_corr_noERR[[i]]$cosmic
-})
+# cdmh_wAGN_no_corr_noERR = data.frame(foreach(i = 1:length(dust_mass_density_wAGN_no_corr_noERR), .combine = bind_rows) %do% {
+#   dust_mass_density_wAGN_no_corr_noERR[[i]]$cosmic
+# })
+# cdmh_birth_wAGN_no_corr_noERR = data.frame(foreach(i = 1:length(dust_birth_mass_density_wAGN_no_corr_noERR), .combine = bind_rows) %do% {
+#   dust_birth_mass_density_wAGN_no_corr_noERR[[i]]$cosmic
+# })
+# cdmh_screen_wAGN_no_corr_noERR = data.frame(foreach(i = 1:length(dust_screen_mass_density_wAGN_no_corr_noERR), .combine = bind_rows) %do% {
+#   dust_screen_mass_density_wAGN_no_corr_noERR[[i]]$cosmic
+# })
 cgmh = data.frame(foreach(i = 1:length(gas_mass_density), .combine = bind_rows) %do% {
   gas_mass_density[[i]]$cosmic
 })
@@ -1765,11 +1525,11 @@ cgmh_wAGN = data.frame(foreach(i = 1:length(gas_mass_density_wAGN), .combine = b
   gas_mass_density_wAGN[[i]]$cosmic
 })
 
-magplot(lbt_mids, (cdmh_wAGN_no_corr_noERR$Q50), ylim = 10**c(3, 7), log = "y")
-points(lbt_mids, (cdmh_birth_wAGN_no_corr_noERR$Q50), col = "red")
-magerr(lbt_mids, (cdmh_birth_wAGN_no_corr_noERR$Q50), ylo=cdmh_birth_wAGN_no_corr_noERR$ERR, col = "red")
-points(lbt_mids, (cdmh_screen_wAGN_no_corr_noERR$Q50), col = "blue")
-magerr(lbt_mids, (cdmh_screen_wAGN_no_corr_noERR$Q50), ylo=cdmh_screen_wAGN_no_corr_noERR$ERR, col = "blue")
+# magplot(lbt_mids, (cdmh_wAGN_no_corr_noERR$Q50), ylim = 10**c(3, 7), log = "y")
+# points(lbt_mids, (cdmh_birth_wAGN_no_corr_noERR$Q50), col = "red")
+# magerr(lbt_mids, (cdmh_birth_wAGN_no_corr_noERR$Q50), ylo=cdmh_birth_wAGN_no_corr_noERR$ERR, col = "red")
+# points(lbt_mids, (cdmh_screen_wAGN_no_corr_noERR$Q50), col = "blue")
+# magerr(lbt_mids, (cdmh_screen_wAGN_no_corr_noERR$Q50), ylo=cdmh_screen_wAGN_no_corr_noERR$ERR, col = "blue")
 
 names_par = c("M", "alpha", "beta", "phi1", "phi2")
 names_par_err = paste0(names_par, "Err")
@@ -1846,6 +1606,8 @@ names(gmf_wAGN_par_err) = names_par_err
 
 dmf_par = data.frame(cbind(dmf_par, dmf_par_err))
 dmf_wAGN_par = data.frame(cbind(dmf_wAGN_par, dmf_wAGN_par_err))
+gmf_par = data.frame(cbind(gmf_par, gmf_par_err))
+gmf_wAGN_par = data.frame(cbind(gmf_wAGN_par, gmf_wAGN_par_err))
 smf_par = data.frame(cbind(smf_par, smf_par_err))
 
 dsilva25 = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/csfh/DSilva25_CSFH_CAGNH_fit.csv"))
@@ -2029,3 +1791,244 @@ fwrite(driver18_cdmh, "~/Documents/DustMassDensity/data/literature_evo/cdmh/driv
 save.image(
   file = "~/Documents/DustMassDensity/data/gama_devils_dust_mass.Rdata"
 )
+
+# dust_mass_density_wAGN_no_corr_noERR = foreach(i = 1:(length(zbins)-1)) %do% {
+#   
+#   # png(paste0("~/Documents/DustMassDensity/plots/dmf-AGN/lbt_",lbt_mids[i],".png"))
+#   GAMA = compute_mass_function(
+#     zlo = zbins[i],
+#     zhi = zbins[i+1],
+#     z = sort_match_AGN$z,
+#     x = sort_match_AGN$dustmass.total,
+#     x_err = 0.5 * (sort_match_AGN$dustmass.total_UB - sort_match_AGN$dustmass.total_LB),
+#     areas = rep(217.54, length(sort_match_AGN$z)),
+#     sm_bins = sm_bins,
+#     errFloor = 0.0,
+#     do_fit = FALSE,
+#     do_plot = TRUE,
+#     add = FALSE,
+#     pt.col = "purple"
+#   )
+#   DEVILS = compute_mass_function(
+#     zlo = zbins[i],
+#     zhi = zbins[i+1],
+#     z = devilsd10_AGN$z,
+#     x = devilsd10_AGN$dustmass.total,
+#     x_err = 0.5 * (devilsd10_AGN$dustmass.total_UB - devilsd10_AGN$dustmass.birth_LB),
+#     areas = rep(1.5, length(devilsd10_AGN$z)),
+#     sm_bins = sm_bins,
+#     errFloor = 0.0,
+#     do_fit = FALSE,
+#     do_plot = TRUE,
+#     add = TRUE,
+#     pt.col = "cornflowerblue"
+#   )
+#   
+#   vmax_combine = foreach(j = 1:(length(sm_bins)-1) , .combine = rbind) %do% {
+#     
+#     if( GAMA$vmax$vmaxErr[j] <= ifelse(DEVILS$vmax$vmaxErr[j]==0, 999, DEVILS$vmax$vmaxErr[j]) ){
+#       if( !GAMA$vmax$mlim[j] ){
+#         c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
+#       }else{
+#         if( (DEVILS$vmax$vmax[j] - GAMA$vmax$vmax[j])/(GAMA$vmax$vmaxErr[j] + 1e-323) > 5 ){
+#           c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
+#         }else{
+#           c(GAMA$vmax$x[j], GAMA$vmax$vmax[j], GAMA$vmax$vmaxErr[j], GAMA$vmax$meanxErr[j])
+#         }
+#       }
+#     }else{
+#       c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
+#     }
+#     
+#   }
+#   
+#   fit = compute_mass_function(
+#     zlo = zbins[i],
+#     zhi = zbins[i+1],
+#     
+#     ## Not gonna use these 
+#     z = devilsd10_noAGN$z,
+#     x = devilsd10_noAGN$dustmass.total,
+#     x_err = 0.5 * (devilsd10_AGN$dustmass.total_UB - devilsd10_AGN$dustmass.birth_LB),
+#     areas = devilsd10_noAGN$area,
+#     
+#     sm_bins = sm_bins,
+#     vmax_bins = vmax_combine[,1],
+#     vmax = vmax_combine[,2],
+#     vmaxErr = sqrt( vmax_combine[,3]^2 ),
+#     meanxErr = vmax_combine[,4],
+#     errFloor = 0.1,
+#     do_fit = TRUE,
+#     do_plot = TRUE,
+#     add = TRUE
+#   )
+#   fit$vmax$GAMA = GAMA$vmax$vmax
+#   fit$vmax$DEVILS = DEVILS$vmax$vmax
+#   points(
+#     10^fit$vmax$x[fit$vmax$mlim == 1],
+#     fit$vmax$vmax[fit$vmax$mlim == 1], 
+#     pch = 16, col = "red"
+#   )
+#   dev.off()
+#   return(fit)
+# }
+# dust_birth_mass_density_wAGN_no_corr_noERR = foreach(i = 1:(length(zbins)-1)) %do% {
+#   
+#   # png(paste0("~/Documents/DustMassDensity/plots/dmf-AGN/lbt_",lbt_mids[i],".png"))
+#   GAMA = compute_mass_function(
+#     zlo = zbins[i],
+#     zhi = zbins[i+1],
+#     z = sort_match_AGN$z,
+#     x = sort_match_AGN$dustmass.birth,
+#     x_err = 0.5 * (sort_match_AGN$dustmass.birth_UB - sort_match_AGN$dustmass.birth_LB),
+#     areas = rep(217.54, length(sort_match_AGN$z)),
+#     sm_bins = sm_bins,
+#     errFloor = 0.0,
+#     do_fit = FALSE,
+#     do_plot = TRUE,
+#     add = FALSE,
+#     pt.col = "purple"
+#   )
+#   DEVILS = compute_mass_function(
+#     zlo = zbins[i],
+#     zhi = zbins[i+1],
+#     z = devilsd10_AGN$z,
+#     x = devilsd10_AGN$dustmass.birth,
+#     x_err = 0.5 * (devilsd10_AGN$dustmass.birth_UB - devilsd10_AGN$dustmass.birth_LB),
+#     areas = rep(1.5, length(devilsd10_AGN$z)),
+#     sm_bins = sm_bins,
+#     errFloor = 0.0,
+#     do_fit = FALSE,
+#     do_plot = TRUE,
+#     add = TRUE,
+#     pt.col = "cornflowerblue"
+#   )
+#   
+#   vmax_combine = foreach(j = 1:(length(sm_bins)-1) , .combine = rbind) %do% {
+#     
+#     if( GAMA$vmax$vmaxErr[j] <= ifelse(DEVILS$vmax$vmaxErr[j]==0, 999, DEVILS$vmax$vmaxErr[j]) ){
+#       if( !GAMA$vmax$mlim[j] ){
+#         c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
+#       }else{
+#         if( (DEVILS$vmax$vmax[j] - GAMA$vmax$vmax[j])/(GAMA$vmax$vmaxErr[j] + 1e-323) > 5 ){
+#           c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
+#         }else{
+#           c(GAMA$vmax$x[j], GAMA$vmax$vmax[j], GAMA$vmax$vmaxErr[j], GAMA$vmax$meanxErr[j])
+#         }
+#       }
+#     }else{
+#       c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
+#     }
+#     
+#   }
+#   
+#   fit = compute_mass_function(
+#     zlo = zbins[i],
+#     zhi = zbins[i+1],
+#     
+#     ## Not gonna use these 
+#     z = devilsd10_noAGN$z,
+#     x = devilsd10_noAGN$dustmass.birth,
+#     x_err = 0.5 * (devilsd10_AGN$dustmass.birth_UB - devilsd10_AGN$dustmass.birth_LB),
+#     areas = devilsd10_noAGN$area,
+#     
+#     sm_bins = sm_bins,
+#     vmax_bins = vmax_combine[,1],
+#     vmax = vmax_combine[,2],
+#     vmaxErr = sqrt( vmax_combine[,3]^2 ),
+#     meanxErr = vmax_combine[,4],
+#     errFloor = 0.1,
+#     do_fit = TRUE,
+#     do_plot = TRUE,
+#     add = TRUE
+#   )
+#   fit$vmax$GAMA = GAMA$vmax$vmax
+#   fit$vmax$DEVILS = DEVILS$vmax$vmax
+#   points(
+#     10^fit$vmax$x[fit$vmax$mlim == 1],
+#     fit$vmax$vmax[fit$vmax$mlim == 1], 
+#     pch = 16, col = "red"
+#   )
+#   dev.off()
+#   return(fit)
+# }
+# dust_screen_mass_density_wAGN_no_corr_noERR = foreach(i = 1:(length(zbins)-1)) %do% {
+#   
+#   # png(paste0("~/Documents/DustMassDensity/plots/dmf-AGN/lbt_",lbt_mids[i],".png"))
+#   GAMA = compute_mass_function(
+#     zlo = zbins[i],
+#     zhi = zbins[i+1],
+#     z = sort_match_AGN$z,
+#     x = sort_match_AGN$dustmass.screen,
+#     x_err = 0.5 * (sort_match_AGN$dustmass.screen_UB - sort_match_AGN$dustmass.screen_LB),
+#     areas = rep(217.54, length(sort_match_AGN$z)),
+#     sm_bins = sm_bins,
+#     errFloor = 0.0,
+#     do_fit = FALSE,
+#     do_plot = TRUE,
+#     add = FALSE,
+#     pt.col = "purple"
+#   )
+#   DEVILS = compute_mass_function(
+#     zlo = zbins[i],
+#     zhi = zbins[i+1],
+#     z = devilsd10_AGN$z,
+#     x = devilsd10_AGN$dustmass.screen,
+#     x_err = 0.5 * (devilsd10_AGN$dustmass.screen_UB - devilsd10_AGN$dustmass.screen_LB),
+#     areas = rep(1.5, length(devilsd10_AGN$z)),
+#     sm_bins = sm_bins,
+#     errFloor = 0.0,
+#     do_fit = FALSE,
+#     do_plot = TRUE,
+#     add = TRUE,
+#     pt.col = "cornflowerblue"
+#   )
+#   
+#   vmax_combine = foreach(j = 1:(length(sm_bins)-1) , .combine = rbind) %do% {
+#     
+#     if( GAMA$vmax$vmaxErr[j] <= ifelse(DEVILS$vmax$vmaxErr[j]==0, 999, DEVILS$vmax$vmaxErr[j]) ){
+#       if( !GAMA$vmax$mlim[j] ){
+#         c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
+#       }else{
+#         if( (DEVILS$vmax$vmax[j] - GAMA$vmax$vmax[j])/(GAMA$vmax$vmaxErr[j] + 1e-323) > 5 ){
+#           c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
+#         }else{
+#           c(GAMA$vmax$x[j], GAMA$vmax$vmax[j], GAMA$vmax$vmaxErr[j], GAMA$vmax$meanxErr[j])
+#         }
+#       }
+#     }else{
+#       c(DEVILS$vmax$x[j], DEVILS$vmax$vmax[j], DEVILS$vmax$vmaxErr[j], DEVILS$vmax$meanxErr[j])
+#     }
+#     
+#   }
+#   
+#   fit = compute_mass_function(
+#     zlo = zbins[i],
+#     zhi = zbins[i+1],
+#     
+#     ## Not gonna use these 
+#     z = devilsd10_noAGN$z,
+#     x = devilsd10_noAGN$dustmass.screen,
+#     x_err = 0.5 * (devilsd10_AGN$dustmass.screen_UB - devilsd10_AGN$dustmass.screen_LB),
+#     areas = devilsd10_noAGN$area,
+#     
+#     sm_bins = sm_bins,
+#     vmax_bins = vmax_combine[,1],
+#     vmax = vmax_combine[,2],
+#     vmaxErr = sqrt( vmax_combine[,3]^2 ),
+#     meanxErr = vmax_combine[,4],
+#     errFloor = 0.1,
+#     do_fit = TRUE,
+#     do_plot = TRUE,
+#     add = TRUE
+#   )
+#   fit$vmax$GAMA = GAMA$vmax$vmax
+#   fit$vmax$DEVILS = DEVILS$vmax$vmax
+#   points(
+#     10^fit$vmax$x[fit$vmax$mlim == 1],
+#     fit$vmax$vmax[fit$vmax$mlim == 1], 
+#     pch = 16, col = "red"
+#   )
+#   dev.off()
+#   return(fit)
+# }

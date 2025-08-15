@@ -284,26 +284,57 @@ magphys_standard =  L_dust(totSED$DustEmit$wave, p = p)
 
 magphys_Mass_contribution = approxfun(
   totSED$DustEmit$wave,
-  (magphys_standard$BC$WBC+magphys_standard$ISM$WISM+magphys_standard$ISM$CISM) /  (magphys_standard$Ltot),
+  (magphys_standard$BC$WBC+magphys_standard$ISM$WISM+magphys_standard$ISM$CISM)/magphys_standard$Ltot,
   rule = 2
 )
+
+# magplot(
+#   totSED$DustEmit$wave,
+#   magphys_standard$Ltot, 
+#   log = "xy", 
+#   lwd = 6, col = "black", 
+#   type = "l"
+# )
+# lines(
+#   totSED$DustEmit$wave,
+#   magphys_standard$ISM$WISM+magphys_standard$ISM$CISM+magphys_standard$BC$WBC, 
+#   col = "red", lwd = 3
+# )
 
 Dale_M2L_new = sapply(1:64, function(i){
   Msol = 1.989e30
   mH = 1.674e-27
   Lsol = 3.828e26
   DTH = 0.0073
-  qPAH = 0.14
-  weight = pmin(pmax(magphys_Mass_contribution(Dale_Orig$Wave), qPAH), 1-qPAH)
-  weight[Dale_Orig$Wave > 1e7] = 1-qPAH
-  foo = Dale_Orig$Aspec[[1]][i,] * Msol/mH/Lsol/(DTH*weight)/Dale_Orig$Wave
+  
+  qPAH_VSG = 0.14
+  weight = pmin(pmax(magphys_Mass_contribution(Dale_Orig$Wave), qPAH_VSG), 1-qPAH_VSG)
+  weight[Dale_Orig$Wave > 1e7] = 1-qPAH_VSG
+  
+  # magplot(
+  #   Dale_Orig$Wave,
+  #   weight * DTH,
+  #   log = "x",
+  #   type = "l",
+  #   ylim = c(0, 0.01),
+  #   xlab = "Wavelength [Ang]",
+  #   ylab = "DTH"
+  # )
+  # text(1e4, 0.002, "PAH+VSG")
+  # text(1e7, 0.0065, "Big grains")
+  # abline(h = 0.0073, col = "red")
+  # legend(
+  #   x = "topright",
+  #   lty = 1,
+  #   col = c("black", "red"),
+  #   legend = c("Variable DTH", "Draine+07")
+  # )
+  
+  # foo = Dale_Orig$Aspec[[1]][i,] * Msol/mH/Lsol/(DTH*weight)/Dale_Orig$Wave
+  foo = ( (Dale_Orig$Aspec[[1]][i, ] / Lsol) / (DTH*weught * mH/Msol))/Dale_Orig$Wave
   sum(
     c(0, diff(Dale_Orig$Wave)) * foo
   )
-  # trapz(
-  #   Dale_Orig$Wave,
-  #   foo
-  # )
 })
 Dale_M2L_func_new = approxfun(
   Dale_M2L$alpha_SF, Dale_M2L_new, rule = 2
