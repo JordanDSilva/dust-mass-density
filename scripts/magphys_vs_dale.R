@@ -331,7 +331,7 @@ Dale_M2L_new = sapply(1:64, function(i){
   # )
   
   # foo = Dale_Orig$Aspec[[1]][i,] * Msol/mH/Lsol/(DTH*weight)/Dale_Orig$Wave
-  foo = ( (Dale_Orig$Aspec[[1]][i, ] / Lsol) / (DTH*weught * mH/Msol))/Dale_Orig$Wave
+  foo = ( (Dale_Orig$Aspec[[1]][i, ] / Lsol) / (DTH*weight * mH/Msol))/Dale_Orig$Wave
   sum(
     c(0, diff(Dale_Orig$Wave)) * foo
   )
@@ -339,6 +339,23 @@ Dale_M2L_new = sapply(1:64, function(i){
 Dale_M2L_func_new = approxfun(
   Dale_M2L$alpha_SF, Dale_M2L_new, rule = 2
 )
+
+magplot(
+  seq(1,4,0.1), 
+  Dale_M2L_func(seq(1,4,0.1)), 
+  log = "y",
+  ylim = c(50, 9e4)
+)
+lines(
+  seq(1,4,0.1), 
+  Dale_M2L_func_new(seq(1,4,0.1))
+)
+
+magplot(
+  seq(1,4,0.1),
+  Dale_M2L_func_new(seq(1,4,0.1))/Dale_M2L_func(seq(1,4,0.1))
+)
+
 
 dale_mass_birth_corr = dale_dust_lum_birth_samples/Dale_M2L_func_new(alpha_birth_samples)
 dale_mass_screen_corr = dale_dust_lum_screen_samples/Dale_M2L_func_new(alpha_screen_samples)
