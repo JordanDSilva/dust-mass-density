@@ -240,6 +240,31 @@ fwrite(
   "~/Documents/DustMassDensity/data/literature_evo/csmh/driver2022.csv"
 )
 
+wright18 = data.frame(
+  "zlo" = c(0.02, 0.08, 0.14, 0.20, 0.28, 0.36, 0.45, 0.56, 0.68, 0.82, 1.00, 1.20, 1.45, 1.75, 2.20, 2.60, 3.25, 3.75, 4.25),
+  "zhi" = c(0.08, 0.14, 0.20, 0.28, 0.36, 0.45, 0.56, 0.68, 0.82, 1.00, 1.20, 1.45, 1.75, 2.20, 2.60, 3.25, 3.75, 4.25, 5.00),
+  "logrho" = c(
+    8.419, 8.51, 8.449, 8.443, 8.409, 8.247, 8.129, 8.125, 8.097,
+    8.124, 8.006, 7.947, 7.844, 7.983, 7.896, 7.613, 7.459, 7.051, 7.006
+  ),
+  "logerr_hi" = c(
+    0.083, 0.054, 0.053, 0.037, 0.043, 0.037, 0.061, 0.076, 0.062,
+    0.061, 0.057, 0.056, 0.052, 0.077, 0.035, 0.053, 0.099, 0.164, 0.047
+  ),
+  "logerr_lo" = c(
+    0.089, 0.059, 0.055, 0.040, 0.049, 0.053, 0.071, 0.101, 0.075,
+    0.069, 0.065, 0.063, 0.055, 0.077, 0.044, 0.048, 0.075, 0.159, 0.052
+  )
+)
+wright18$z = 0.5 * (wright18$zlo + wright18$zhi)
+wright18$logerr = 0.5 * (wright18$logerr_hi + wright18$logerr_lo)
+wright18$rho = 10^wright18$logrho
+wright18$err = 10^wright18$logrho * wright18$logerr * log(10)
+fwrite(
+  wright18,
+  "~/Documents/DustMassDensity/data/literature_evo/csmh/wright18.csv"
+)
+
 ## Black hole density
 vika09 = data.frame(
   "z" = 0.0,

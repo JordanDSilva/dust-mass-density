@@ -5,6 +5,10 @@ library(scales)
 library(rhdf5)
 library(matrixStats)
 library(data.table)
+library(foreach)
+library(ProSpect)
+library(doParallel)
+library(Highlander)
 
 magphys_cat = Rfits_read_table("~/Documents/DustMassDensity/data/GAMA/MagPhysv06.fits")
 prospect_cat = Rfits_read_table("~/Documents/DustMassDensity/data/GAMA/ProSpectv03.fits")
@@ -15,142 +19,60 @@ profoundIR_phot_raw = Rfits_read_table("~/Documents/DustMassDensity/data/GAMA/gk
 profoundIR_phot = profoundIR_phot_raw[profoundIR_phot_raw$uberID %in% profoundgkv_phot_raw$uberID, ]
 profoundgkv_phot = profoundgkv_phot_raw[profoundgkv_phot_raw$uberID %in% profoundIR_phot$uberID, ]
 message(all(profoundIR_phot$uberID == profoundgkv_phot$uberID)) ## Check that they are matched
-# profoundIR_phot$Z = profoundgkv_phot$Z
-# profoundIR_phot$RA = profoundgkv_phot$RAmax
-# profoundIR_phot$DEC = profoundgkv_phot$Decmax
 profound_phot = cbind(profoundgkv_phot, profoundIR_phot)
 
-lambdar_idx = lambdar_phot$P100_flux/lambdar_phot$P100_fluxerr > 5 & 
-  lambdar_phot$P160_flux/lambdar_phot$P160_fluxerr > 5 & 
-  lambdar_phot$S250_flux/lambdar_phot$S250_fluxerr > 5 &
-  lambdar_phot$S350_flux/lambdar_phot$S350_fluxerr > 5 &
-  lambdar_phot$S500_flux/lambdar_phot$S500_fluxerr > 5
+dim(profound_phot)
+dim(prospect_cat)
 
-profound_idx = profound_phot$flux_PSF_p100/profound_phot$flux_PSF_err_p100 > 5 & 
-  profound_phot$flux_PSF_p160/profound_phot$flux_PSF_err_p160 > 5 & 
-  profound_phot$flux_PSF_s250/profound_phot$flux_PSF_err_s250 > 5 &
-  profound_phot$flux_PSF_s350/profound_phot$flux_PSF_err_s350 > 5 &
-  profound_phot$flux_PSF_s500/profound_phot$flux_PSF_err_s500 > 5
+dim(lambdar_phot)
+dim(magphys_cat)
 
-lambdar_trim = lambdar_phot[lambdar_idx,]
-profound_trim = profound_phot[profound_idx,]
+## Only get photometry for those that were SED fitted
+lambdar_phot_match = lambdar_phot[lambdar_phot$CATAID %in% magphys_cat$CATAID, ]
+message(all(lambdar_phot_match$CATAID == magphys_cat$CATAID)) ## Check that they are matched
+lambdar_magphys = cbind(lambdar_phot_match, magphys_cat)
+
+profound_phot_match = profound_phot[profound_phot$uberID %in% prospect_cat$uberID, ]
+message(all(profound_phot_match$uberID == prospect_cat$uberID)) ## Check that they are matched
+message(all(profound_phot_match$CATAID == prospect_cat$CATAID)) ## Check that they are matched
+profound_prospect = cbind(profound_phot_match, prospect_cat)
+
+lambdar_idx = lambdar_magphys$P100_flux/lambdar_magphys$P100_fluxerr > 5 & 
+  lambdar_magphys$P160_flux/lambdar_magphys$P160_fluxerr > 5 & 
+  lambdar_magphys$S250_flux/lambdar_magphys$S250_fluxerr > 5 &
+  lambdar_magphys$S350_flux/lambdar_magphys$S350_fluxerr > 5 &
+  lambdar_magphys$S500_flux/lambdar_magphys$S500_fluxerr > 5
+
+profound_idx = profound_prospect$flux_PSF_p100/profound_prospect$flux_PSF_err_p100 > 5 & 
+  profound_prospect$flux_PSF_p160/profound_prospect$flux_PSF_err_p160 > 5 & 
+  profound_prospect$flux_PSF_s250/profound_prospect$flux_PSF_err_s250 > 5 &
+  profound_prospect$flux_PSF_s350/profound_prospect$flux_PSF_err_s350 > 5 &
+  profound_prospect$flux_PSF_s500/profound_prospect$flux_PSF_err_s500 > 5
+
+lambdar_magphys_trim = lambdar_magphys[lambdar_idx,]
+profound_prospect_trim = profound_prospect[profound_idx,]
 
 idx_coordmatch = coordmatch(
-  coordref = profound_trim[, c("RAmax", "Decmax")],
-  coordcompare = lambdar_trim[, c("RA", "DEC")]
+  coordref = profound_prospect_trim[, c("RAmax", "Decmax")],
+  coordcompare = lambdar_magphys_trim[, c("RA", "DEC")]
 )
 
-profound_match = profound_trim[idx_coordmatch$bestmatch$refID, ]
-lambdar_match = lambdar_trim[idx_coordmatch$bestmatch$compareID, ]
-
-magphys_match = magphys_cat[magphys_cat$CATAID %in% lambdar_match$CATAID, ]
-lambdar_magphys_match = lambdar_match[lambdar_match$CATAID %in% magphys_match$CATAID, ]
-magphys_match$RA =  lambdar_magphys_match$RA
-magphys_match$DEC =  lambdar_magphys_match$DEC
-
-prospect_match = prospect_cat[prospect_cat$uberID %in% profound_match$uberID, ]
-profound_prospect_match = profound_match[profound_match$uberID %in% prospect_cat$uberID, ]
-prospect_match$RA = profound_prospect_match$RAmax
-prospect_match$DEC = profound_prospect_match$Decmax
-prospect_match$Z = profound_prospect_match$Z
-
-idx2_coordmatch = coordmatch(
-  coordref = prospect_match[, c("RA", "DEC")],
-  coordcompare = magphys_match[, c("RA", "DEC")]
-)
-
-prospect_final_sample = prospect_match[idx2_coordmatch$bestmatch$refID, ]
-magphys_final_sample = magphys_match[idx2_coordmatch$bestmatch$compareID, ]
-
-profound_final_sample = data.frame(profound_prospect_match[idx2_coordmatch$bestmatch$refID, ])
-lambdar_final_sample = data.frame(lambdar_magphys_match[idx2_coordmatch$bestmatch$compareID, ])
-
-# magplot(
-#   prospect_final_sample$RA, prospect_final_sample$DEC, pch = 1, lwd=3, col = "red", cex = 2, type = "p", xlab = "RA", ylab = "DEC"
-# )
-# points(
-#   magphys_final_sample$RA, magphys_final_sample$DEC, pch = 4, col = "darkorange", cex = 2, lwd = 3
-# )
-# legend(
-#   x = "bottomleft",
-#   legend = c("ProFound", "Lambdar"),
-#   pch = c(1, 4), 
-#   cex = 1.3,
-#   lwd = NA,
-#   col = c("red", "darkorange")
-# )
-# 
-# magplot(
-#   (prospect_final_sample$RA - magphys_final_sample$RA), 
-#   prospect_final_sample$DEC - magphys_final_sample$DEC
-# )
-# 
-# magplot(prospect_final_sample$Z, magphys_final_sample$Z)
-# 
-# par(mfrow = c(2,1), mar = c(2.5, 2.5, 0.5, 0.5), oma = rep(1.0,4))
-# magplot(
-#   log10(prospect_final_sample$DustMass_50),
-#   magphys_final_sample$mass_dust_percentile50, 
-#   xlab = "ProSpect Mdust [Msun]",
-#   ylab = "Magphys Mdust [Msun]"
-# )
-# magerr(
-#   log10(prospect_final_sample$DustMass_50),
-#   magphys_final_sample$mass_dust_percentile50,
-#   xlo = (prospect_final_sample$DustMass_50-prospect_final_sample$DustMass_16)/(log(10) * prospect_final_sample$DustMass_50),
-#   xhi = (prospect_final_sample$DustMass_84-prospect_final_sample$DustMass_50)/(log(10) * prospect_final_sample$DustMass_50),
-#   ylo = magphys_final_sample$mass_dust_percentile50 - magphys_final_sample$mass_dust_percentile16,
-#   yhi = magphys_final_sample$mass_dust_percentile84 - magphys_final_sample$mass_dust_percentile50
-# )
-# abline(0,1, col = "red", lwd = 3)
-# 
-# maghist(
-#   log10(prospect_final_sample$DustMass_50) - magphys_final_sample$mass_dust_percentile50, breaks = seq(-3,3,0.1), 
-#   ylab = "Frequency", xlab = "ProSpect - Magphys [dex]"
-# )
-# abline(v = 0.48889, col = "red", lwd = 3)
-# legend(
-#   x = "topleft", 
-#   col = c("red"), 
-#   lwd = 3,
-#   legend = paste0("Median = ", 0.48889)
-# )
-# 
-# par(mfrow = c(2,1), mar = c(2.5, 2.5, 0.5, 0.5), oma = rep(1.0,4))
-# magplot(
-#   prospect_final_sample$Z,
-#   magphys_final_sample$Z, 
-#   xlab = "ProSpect redshift",
-#   ylab = "Magphys redshift"
-# )
-# abline(0,1, col = "red", lwd = 3)
-# maghist(
-#   prospect_final_sample$Z - magphys_final_sample$Z, 
-#   xlab = "ProSpect redshift - Magphys redshift",
-#   ylab = "Frequency", 
-#   breaks = 40
-# )
-# abline(v = -0.0004900, col = "red", lwd = 3)
-# legend(
-#   x = "topleft", 
-#   col = c("red"), 
-#   lwd = 3,
-#   legend = paste0("Median = ", -0.0004900)
-# )
+lambdar_magphys_match = data.frame(lambdar_magphys_trim[idx_coordmatch$bestmatch$compareID, ])
+profound_prospect_match = data.frame(profound_prospect_trim[idx_coordmatch$bestmatch$refID, ])
 
 df = data.frame(
-  "zProSpect" = prospect_final_sample$Z,
-  "MdustProSpect" = prospect_final_sample$DustMass_50,
-  "MdustErrProSpect" = 0.5*(prospect_final_sample$DustMass_84 - prospect_final_sample$DustMass_16),
-  "RAProSpect" = prospect_final_sample$RA,
-  "DECProSpect" = prospect_final_sample$DEC,
+  "zProSpect" = profound_prospect_match$Z,
+  "MdustProSpect" = profound_prospect_match$DustMass_50,
+  "MdustErrProSpect" = 0.5*(profound_prospect_match$DustMass_84 - profound_prospect_match$DustMass_16),
+  "RAProSpect" = profound_prospect_match$RAmax,
+  "DECProSpect" = profound_prospect_match$Decmax,
   
-  "zMagphys" = magphys_final_sample$Z,
-  "MdustMagphys" = 10^magphys_final_sample$mass_dust_percentile50,
-  "MdustErrMagphys" = sqrt( (10^magphys_final_sample$mass_dust_percentile50 * log(10) * 0.5 * (magphys_final_sample$mass_dust_percentile84 - magphys_final_sample$mass_dust_percentile16))^2 ),
-  "RAMagphys" = magphys_final_sample$RA,
-  "DECMagphys" = magphys_final_sample$DEC,
-  data.frame(magphys_final_sample)[,grep("^(mass_dust|L_dust|f_mu_IR|xi|T).*best_fit", names(magphys_cat), value = TRUE, perl = TRUE)]
+  "zMagphys" = lambdar_magphys_match$Z,
+  "MdustMagphys" = 10^lambdar_magphys_match$mass_dust_percentile50,
+  "MdustErrMagphys" = sqrt( (10^lambdar_magphys_match$mass_dust_percentile50 * log(10) * 0.5 * (lambdar_magphys_match$mass_dust_percentile84 - lambdar_magphys_match$mass_dust_percentile16))^2 ),
+  "RAMagphys" = lambdar_magphys_match$RA,
+  "DECMagphys" = lambdar_magphys_match$DEC,
+  data.frame(lambdar_magphys_match)[,grep("^(mass_dust|L_dust|f_mu_IR|xi|T).*best_fit", names(lambdar_magphys_match), value = TRUE, perl = TRUE)]
 )
 
 wavelength = c(
@@ -158,14 +80,13 @@ wavelength = c(
   3.4e4, 4.65e4, 12.8e4, 22.4e4, 98.9e4, 156e4, 249e4, 350e4, 504e4
 )
 
-profound_fluxes = profound_final_sample[, grep("^flux_(?!err)(?!.*_err)(?!.*l$).*", names(profound_final_sample), perl = TRUE, value = TRUE)]
-profound_flux_errs = profound_final_sample[, grep("err", names(profound_final_sample), perl = TRUE, value = TRUE)]
+profound_fluxes = profound_prospect_match[, grep("^flux_(?!err)(?!.*_err)(?!.*l$).*", names(profound_prospect_match), perl = TRUE, value = TRUE)]
+profound_flux_errs = profound_prospect_match[, grep("err", names(profound_prospect_match), perl = TRUE, value = TRUE)]
 profound_fluxes[profound_fluxes < 0] = 0
 profound_flux_errs = sqrt( profound_flux_errs^2 + (0.1 * profound_fluxes)^2 )
 
-lambdar_fluxes = lambdar_final_sample[, grep("^(?!z_flux$).*flux(?!err)", names(lambdar_final_sample), perl = TRUE, value = TRUE)]
-lambdar_flux_errs = lambdar_final_sample[, grep("^(?!z_fluxerr$).*err", names(lambdar_final_sample), perl = TRUE, value = TRUE)]
-lambdar_fluxes[lambdar_fluxes == -999] = NA
+lambdar_fluxes = lambdar_magphys_match[, grep("^(?!z_flux$).*flux(?!err)", names(lambdar_magphys_match), perl = TRUE, value = TRUE)]
+lambdar_flux_errs = lambdar_magphys_match[, grep("^(?!z_fluxerr$).*err", names(lambdar_magphys_match), perl = TRUE, value = TRUE)]
 lambdar_fluxes[lambdar_fluxes < 0] = 0
 lambdar_flux_errs = sqrt( lambdar_flux_errs^2 + (0.1 * lambdar_fluxes)^2 )
 
@@ -183,30 +104,295 @@ df_spec = data.frame(
 )
 
 # magplot(
-#   NA,
-#   log = "xy", 
-#   ylim = c(1e-5, 0.5),
-#   xlim = c(1e3, 1e7),
-#   pch = 16
+#   lambdar_magphys_match$mass_dust_percentile50, 
+#   log10(profound_prospect_match$DustMass_50), 
+#   xlab = "Magphys Dust mass",
+#   ylab = "ProSpect Dust mass"
 # )
-# for(kk in 1:dim(profound_fluxes)[1]){
-#   points(wavelength, unlist(profound_fluxes[kk,]), col = alpha("darkorange",0.1), pch = 16)
-#   magerr(wavelength, unlist(profound_fluxes[kk,]), ylo = unlist(unlist(profound_flux_errs[kk,])), col = alpha("darkorange",0.1))
-#   points(wavelength, unlist(lambdar_fluxes[kk,]), col = alpha("darkred",0.1), pch = 16)
-#   magerr(wavelength, unlist(lambdar_fluxes[kk,]), ylo = unlist(unlist(lambdar_flux_errs[kk,])), col = alpha("darkred",0.1))
-# }
+# magplot(
+#   lambdar_magphys_match$L_dust_percentile50, 
+#   log10(profound_prospect_match$DustLum_50), 
+#   xlab = "Magphys Dust mass",
+#   ylab = "ProSpect Dust mass"
+# )
+# abline(0,1)
+# 
+# magplot(
+#   lambdar_magphys_match$RA,
+#   lambdar_magphys_match$DEC
+# )
 # points(
-#   wavelength, profound_weighted_stack, pch = 16, col = "darkorange"
+#   profound_prospect_match$RAmax,
+#   profound_prospect_match$Decmax,
+#   pch = 16, cex = 0.5
 # )
-# magerr(
-#   wavelength, profound_weighted_stack, ylo = profound_weighted_err, col = "darkorange"
-# )
-# points(
-#   wavelength, lambdar_weighted_stack, pch =16, col = "darkred"
-# )
-# magerr(
-#   wavelength, lambdar_weighted_stack, ylo = lambdar_weighted_err, col = "darkred"
-# )
+
+## Fit with single component grey body?
+filtout = list(
+  approxfun(getfilt("FUV"), yleft = 0, yright = 0),
+  approxfun(getfilt("NUV"), yleft = 0, yright = 0),
+  approxfun(getfilt("u_VST"), yleft = 0, yright = 0),
+  approxfun(getfilt("g_VST"), yleft = 0, yright = 0),
+  approxfun(getfilt("r_VST"), yleft = 0, yright = 0),
+  approxfun(getfilt("i_VST"), yleft = 0, yright = 0),
+  approxfun(getfilt("Z_VISTA"), yleft = 0, yright = 0),
+  approxfun(getfilt("Y_VISTA"), yleft = 0, yright = 0),
+  approxfun(getfilt("J_VISTA"), yleft = 0, yright = 0),
+  approxfun(getfilt("H_VISTA"), yleft = 0, yright = 0),
+  approxfun(getfilt("K_VISTA"), yleft = 0, yright = 0),
+  approxfun(getfilt("W1_WISE"), yleft = 0, yright = 0),
+  approxfun(getfilt("W2_WISE"), yleft = 0, yright = 0),
+  approxfun(getfilt("W3_WISE"), yleft = 0, yright = 0),
+  approxfun(getfilt("W4_WISE"), yleft = 0, yright = 0),
+  approxfun(getfilt("P100_Herschel"), yleft = 0, yright = 0),
+  approxfun(getfilt("P160_Herschel"), yleft = 0, yright = 0),
+  approxfun(getfilt("S250_Herschel"), yleft = 0, yright = 0),
+  approxfun(getfilt("S350_Herschel"), yleft = 0, yright = 0),
+  approxfun(getfilt("S500_Herschel"), yleft = 0, yright = 0)
+)
+wave_grey_body = 10^seq(3, 8, 0.01)
+grey_body_fits = foreach(kk = 1:dim(profound_prospect_match)[1], .combine = rbind) %do% {
+  if(kk %% 10 == 0){message(kk)}
+  
+  # Ldust = 10^magphys_final_sample$L_dust_percentile50[kk]
+  # Ldust = prospect_final_sample$DustLum_50[kk]
+  fit_idx = 16:20
+  
+  # ff = lambdar_fluxes[kk, ]
+  # fferr = lambdar_flux_errs[kk, ]
+  ff = profound_fluxes[kk, ]
+  fferr = profound_flux_errs[kk, ]
+  
+  LL = function(parm){
+    
+    Temp = parm[1]
+    Ldust = parm[2]
+    
+    rest_frame = greybody_norm(
+      wave = wave_grey_body, 
+      Temp = Temp, 
+      beta = 2.0, 
+      z = profound_prospect_match$Z[kk],
+      norm = 10^Ldust
+    )
+    
+    observed_frame = photom_lum(
+      wave = wave_grey_body,
+      lum = rest_frame,
+      outtype = "Jy",
+      filters = filtout[fit_idx],
+      z = profound_prospect_match$Z[kk],
+      ref = "Planck15"
+    )
+    
+    likelihood = sum(dnorm(
+      x = unlist(ff[fit_idx]),
+      mean = observed_frame,
+      sd = unlist(unlist(fferr[fit_idx])),
+      log = TRUE
+    ), na.rm = TRUE)
+    return(likelihood)
+  }
+  
+  opt = optim(
+    par = c(15, 9),
+    fn = LL,
+    method = "L-BFGS-B",
+    lower = c(5, 4),
+    upper = c(150, 15),
+    control = list(fnscale = -1),
+    hessian = TRUE
+  )
+  
+  rest_frame = greybody_norm(
+    wave = wave_grey_body, 
+    Temp = opt$par[1], 
+    beta = 2.0, 
+    z = profound_prospect_match$Z[kk],
+    norm = 10^opt$par[2]
+  )
+  observed_frame = photom_lum(
+    wave = wave_grey_body,
+    lum = rest_frame,
+    outtype = "Jy",
+    filters = filtout[fit_idx],
+    z = profound_prospect_match$Z[kk],
+    ref = "Planck15"
+  )
+  observed_lambdaflux = Lum2Flux(
+    wave = wave_grey_body,
+    lum = rest_frame,
+    z = profound_prospect_match$Z[kk], 
+    ref = "Planck15"
+  )
+  observed_freqflux = convert_wave2freq(
+    flux_wave = observed_lambdaflux$flux,
+    wave = observed_lambdaflux$wave
+  )
+  
+  png(paste0("~/Documents/DustMassDensity/plots/fit_greybody/", kk, ".png"))
+  magplot(
+    wavelength,
+    unlist(ff),
+    ylim = c(1e-5, 10),
+    log = "xy",
+    pch = 16,
+    col = "red",
+  )
+  magerr(
+    wavelength,
+    unlist(ff),
+    ylo = unlist(fferr),
+    col = "red"
+  )
+  points(
+    wavelength[fit_idx],
+    observed_frame,
+    pch = 1, 
+    cex = 1.5
+  )
+  lines(
+    observed_lambdaflux$wave,
+    CGS2Jansky(observed_freqflux)
+  )
+  dev.off()
+  
+  T_best = opt$par[1]
+  L_best = opt$par[2]
+  err = sqrt(diag(-solve(opt$hessian)))
+  T_err = err[1]
+  L_err = err[2]
+  
+  grey_body_best = greybody(
+    wave = wave_grey_body, 
+    Temp = T_best, 
+    beta = 2.0, 
+    k850 = 0.077
+  )
+  Mdust_best = 10^L_best / sum(c(0,diff(wave_grey_body))*grey_body_best)
+  # Mdust_best = Ldust / trapz(x = wave_grey_body, grey_body_best)
+  
+  # trapz(x = wave_grey_body, grey_body_best)
+  
+  Mdust_samples = sapply(1:1000, function(x){
+    T_sample = rnorm(n = 1, mean = T_best, sd = T_err)
+    L_sample = rnorm(n = 1, mean = L_best, sd = L_err)
+    grey_body_sample = greybody(
+      wave = wave_grey_body, 
+      Temp = T_sample, 
+      beta = 2.0, 
+      k850 = 0.077
+    )
+    Mdust_sample = 10^L_sample / sum(c(0,diff(wave_grey_body))*grey_body_sample)
+    return(Mdust_sample)
+  })
+  
+  MdustQ16 = quantile(Mdust_samples, 0.16)
+  MdustQ84 = quantile(Mdust_samples, 0.84)
+  MdustErr = 0.5 * (MdustQ84 - MdustQ16)
+
+  ret_ = data.frame(
+    "Ldust" = L_best,
+    "LdustErr" = L_err,
+    "Mdust" = Mdust_best,
+    "MdustErr" = MdustErr,
+    "Tdust" = T_best,
+    "TdustErr" = T_err
+  )
+  return(ret_)
+}
+
+par(mfrow = c(1,2))
+magplot(
+  10^grey_body_fits$Ldust,
+  10^lambdar_magphys_match$L_dust_percentile50,
+  xlab = "Grey body Dust luminosity [Lsun]",
+  ylab = "Magphys/ProSpect luminosity [Lsun]",
+  col = alpha("black", 0.5),
+  log = "xy",
+  xlim = c(1e7,1e13),
+  ylim = c(1e7, 1e13)
+)
+points(
+  10^grey_body_fits$Ldust,
+  profound_prospect_match$DustLum_50,
+  pch = 16, 
+  col = alpha("red", 0.5)
+)
+legend(
+  x = "bottomright",
+  pch = c(1,16),
+  col = c("black", "red"), 
+  legend = c("Magphys", "ProSpect")
+)
+abline(0,1)
+maghist(
+  log10(10^grey_body_fits$Ldust/profound_prospect_match$DustLum_50), 
+  xlab = "Grey body - ProSpect [dex]"
+)
+
+magplot(
+  grey_body_fits$Mdust, 
+  10^lambdar_magphys_match$mass_dust_percentile50, 
+  xlab = "Grey body Dust Mass [Msun]",
+  ylab = "Magphys/ProSpect Dust Mass [Msun]",
+  col = alpha("black", 0.5),
+  log = "xy",
+  xlim = c(1e5,1e10),
+  ylim = c(1e5, 1e10)
+)
+points(
+  grey_body_fits$Mdust,
+  profound_prospect_match$DustMass_50, 
+  pch = 16, 
+  col = alpha("red", 0.5)
+)
+legend(
+  x = "bottomright",
+  pch = c(1,16),
+  col = c("black", "red"), 
+  legend = c("Magphys", "ProSpect")
+)
+abline(0,1)
+maghist(
+  log10((grey_body_fits$Mdust)/profound_prospect_match$DustMass_50), 
+  xlab = "Grey body - ProSpect [dex]", 
+  breaks = seq(-2.5, 1.0, 0.1), 
+  ylim = c(0, 80),
+  col = alpha("black", 0.4), 
+)
+maghist(
+  log10((grey_body_fits$Mdust)/10^lambdar_magphys_match$mass_dust_percentile50), 
+  add = TRUE, 
+  breaks = seq(-2.5, 1.0, 0.1),
+  col = alpha("blue", 0.4)
+)
+
+magplot(
+  NA,
+  log = "xy",
+  ylim = c(1e-5, 0.5),
+  xlim = c(1e3, 1e7),
+  pch = 16
+)
+for(kk in 1:dim(profound_fluxes)[1]){
+  points(wavelength, unlist(profound_fluxes[kk,]), col = alpha("darkorange",0.1), pch = 16)
+  magerr(wavelength, unlist(profound_fluxes[kk,]), ylo = unlist(unlist(profound_flux_errs[kk,])), col = alpha("darkorange",0.1))
+  points(wavelength, unlist(lambdar_fluxes[kk,]), col = alpha("darkred",0.1), pch = 16)
+  magerr(wavelength, unlist(lambdar_fluxes[kk,]), ylo = unlist(unlist(lambdar_flux_errs[kk,])), col = alpha("darkred",0.1))
+}
+points(
+  wavelength, profound_weighted_stack, pch = 16, col = "darkorange"
+)
+magerr(
+  wavelength, profound_weighted_stack, ylo = profound_weighted_err, col = "darkorange"
+)
+points(
+  wavelength, lambdar_weighted_stack, pch =16, col = "darkred"
+)
+magerr(
+  wavelength, lambdar_weighted_stack, ylo = lambdar_weighted_err, col = "darkred"
+)
 
 h5file = '~/Documents/DustMassDensity/data/all_data.h5'
 h5delete(h5file, "Photometry")
@@ -222,86 +408,106 @@ foobar = h5read(
  file = h5file, name = "Photometry/FinalSample"
 )
 
-## Save data from prospect fitting
-# filtout = list(
-#   approxfun(getfilt("FUV"),rule = 2),
-#   approxfun(getfilt("NUV"),rule = 2),
-#   approxfun(getfilt("u_VST"),rule = 2),
-#   approxfun(getfilt("g_VST"),rule = 2),
-#   approxfun(getfilt("r_VST"),rule = 2),
-#   approxfun(getfilt("i_VST"),rule = 2),
-#   approxfun(getfilt("Z_VISTA"),rule = 2),
-#   approxfun(getfilt("Y_VISTA"),rule = 2),
-#   approxfun(getfilt("J_VISTA"),rule = 2),
-#   approxfun(getfilt("H_VISTA"),rule = 2),
-#   approxfun(getfilt("K_VISTA"),rule = 2),
-#   approxfun(getfilt("W1_WISE"),rule = 2),
-#   approxfun(getfilt("W2_WISE"),rule = 2),
-#   approxfun(getfilt("W3_WISE"),rule = 2),
-#   approxfun(getfilt("W4_WISE"),rule = 2),
-#   approxfun(getfilt("P100_Herschel"),rule = 2),
-#   approxfun(getfilt("P160_Herschel"),rule = 2),
-#   approxfun(getfilt("S250_Herschel"),rule = 2),
-#   approxfun(getfilt("S350_Herschel"),rule = 2),
-#   approxfun(getfilt("S500_Herschel"),rule = 2)
-# )
-# profound_Data = list(
-#   "flux" = profound_fluxes,
-#   "flux_err" = profound_flux_errs,
-#   "redshifts" = prospect_match$Z,
-#   "magphys_redshifts" = magphys_match$Z,
-#   "uberID" = profound_final_sample$uberID,
-#   "RA" = profound_final_sample$RAmax,
-#   "Dec" = profound_final_sample$Decmax,
-#   "filtout" = filtout,
-#   "cenwave" = wavelength
-# )
-# saveRDS(profound_Data, "~/Documents/DustMassDensity/data/save_highSN_sample.rds")
-# foo = readRDS("~/Documents/DustMassDensity/data/save_highSN_sample.rds")
-# list2env(foo, envir = .GlobalEnv)
-# rm(foo)
-# rm(cenwave)
-# save.image("~/Documents/DustMassDensity/scripts/Pawsey/save_highSN_sample.rda")
-# file.remove("~/Documents/DustMassDensity/data/save_highSN_sample.rds")
+## Refit FML
+profound_Data = list(
+  "flux" = profound_fluxes,
+  "flux_err" = profound_flux_errs,
+  "redshifts" = profound_prospect_match$Z,
+  "uberID" = profound_prospect_match$uberID,
+  "catID" = profound_prospect_match$CATAID,
+  "RA" = profound_prospect_match$RAmax,
+  "Dec" = profound_prospect_match$Decmax
+  # "filtout" = filtout
+)
+saveRDS(profound_Data, "~/Documents/DustMassDensity/Pawsey/save_highSN_sample.rds")
 
-prospect_fnames = list.files("/Users/22252335/Documents/DustMassDensity/Pawsey/magphysLike/", full.names = TRUE)
+prospect_fnames = list.files("/Users/22252335/Documents/DustMassDensity/Pawsey/out/", full.names = TRUE)
 prospect_files = lapply(prospect_fnames, function(x){
   foo = readRDS(x)
   # plot(foo$bestfit$SEDout)
-  bar = c(colQuantiles(as.matrix(foo$parm_sample), probs = c(0.16, 0.5, 0.84)), foo$RA, foo$Dec, colQuantiles(as.matrix(foo$highlander$LD_last$Posterior1[, c("alpha_SF_screen", "alpha_SF_birth")]), probs = c(0.16, 0.5, 0.84)))
-  names(bar) = c(paste0(names(foo$parm_sample),"Q16"), paste0(names(foo$parm_sample),"Q50"), paste0(names(foo$parm_sample),"Q84"), "RA", "Dec", paste0(c("alpha_screen", "alpha_birth"),"Q16"), paste0(c("alpha_screen", "alpha_birth"),"Q50"), paste0(c("alpha_screen", "alpha_birth"),"Q84"))
+  bar = c(colQuantiles(as.matrix(foo$parm_sample), probs = c(0.16, 0.5, 0.84)), foo$RA, foo$Dec, colQuantiles(as.matrix(foo$highlander$LD_last$Posterior1[, c("alpha_SF_screen", "alpha_SF_birth", "Zfinal")]), probs = c(0.16, 0.5, 0.84)))
+  names(bar) = c(paste0(names(foo$parm_sample),"Q16"), paste0(names(foo$parm_sample),"Q50"), paste0(names(foo$parm_sample),"Q84"), "RA", "Dec", paste0(c("alpha_screen", "alpha_birth", "Zfinal"),"Q16"), paste0(c("alpha_screen", "alpha_birth", "Zfinal"),"Q50"), paste0(c("alpha_screen", "alpha_birth", "Zfinal"),"Q84"))
   return(bar)
 })
 prospect_refit = data.frame(do.call(rbind, prospect_files))
 
 prospect_coord_match = coordmatch(
-  coordref = profound_final_sample[, c("RAmax", "Decmax")], 
+  coordref = profound_prospect_match[, c("RAmax", "Decmax")], 
   coordcompare = prospect_refit[, c("RA", "Dec")]
 )
+prospect_refit$stub = prospect_fnames
 prospect_refit_match = prospect_refit[prospect_coord_match$bestmatch$compareID, ]
-new_dust_mass = prospect_refit_match$DustLumBirthQ50/Dale_vM2L_func(alpha_SF = prospect_refit_match$alpha_birthQ50, Zfinal = 0.02) + prospect_refit_match$DustLumScreenQ50/Dale_vM2L_func(alpha_SF = prospect_refit_match$alpha_screenQ50, Zfinal = 0.02)
 
-## ITS JUST CHEWY THANKS FOR THE FIFTY GIFTED 
 magplot(
-  log10(prospect_refit_match$DustMassQ50),
-  magphys_final_sample$mass_dust_percentile50 , 
-  xlim = c(2, 10),
-  yli = c(2,10)
+  prospect_refit_match$DustLumQ50,
+  profound_prospect_match$DustLum_50,
+  log = "xy"
 )
-points(
-  log10(prospect_final_sample$DustMass_50), 
-  magphys_final_sample$mass_dust_percentile50, 
-  pch = 16, col = "blue"
+magerr(
+  prospect_refit_match$DustLumQ50,
+  profound_prospect_match$DustLum_50,
+  xlo = (prospect_refit_match$DustLumQ84 - prospect_refit_match$DustLumQ16) * 0.5,
+  ylo = (profound_prospect_match$DustLum_84 - profound_prospect_match$DustLum_16) * 0.5,
 )
 abline(0,1)
 
-maghist(
-  magphys_final_sample$mass_dust_percentile50 - log10(prospect_final_sample$DustMass_50)
+magplot(
+  prospect_refit_match$DustMassQ50,
+  profound_prospect_match$DustMass_50,
+  log = "xy"
 )
-maghist(
-  magphys_final_sample$mass_dust_percentile50 - log10(prospect_refit_match$DustMassQ50)
+magerr(
+  prospect_refit_match$DustMassQ50,
+  profound_prospect_match$DustMass_50,
+  xlo = (prospect_refit_match$DustMassQ84 - prospect_refit_match$DustMassQ16) * 0.5,
+  ylo = (profound_prospect_match$DustMass_84 - profound_prospect_match$DustMass_16) * 0.5,
 )
+abline(0,1)
+new_dust_mass = prospect_refit_match$DustLumBirthQ50/Dale_vM2L_func(alpha_SF = prospect_refit_match$alpha_birthQ50, Zfinal = 10^prospect_refit_match$ZfinalQ50) + prospect_refit_match$DustLumScreenQ50/Dale_vM2L_func(alpha_SF = prospect_refit_match$alpha_screenQ50, Zfinal = 10^prospect_refit_match$ZfinalQ50)
+new_dust_mass_solar = prospect_refit_match$DustLumBirthQ50/Dale_vM2L_func(alpha_SF = prospect_refit_match$alpha_birthQ50, Zfinal = 0.02) + prospect_refit_match$DustLumScreenQ50/Dale_vM2L_func(alpha_SF = prospect_refit_match$alpha_screenQ50, Zfinal = 0.02)
+
+magplot(
+  new_dust_mass,
+  profound_prospect_match$DustMass_50,
+  log = "xy",
+  xlim = c(1e5,1e10),
+  ylim = c(1e5, 1e10)
+)
+points(
+  10^lambdar_magphys_match$mass_dust_percentile50,
+  profound_prospect_match$DustMass_50, 
+  col = alpha("red", 0.5),
+  pch = 16
+)
+points(
+  grey_body_fits$Mdust*1.1*1.6,
+  profound_prospect_match$DustMass_50, 
+  pch = 16, 
+  col = alpha("blue", 0.5)
+)
+abline(0,1)
+
+
 maghist(
-  magphys_final_sample$mass_dust_percentile50 - log10(new_dust_mass) 
+  log10(
+    grey_body_fits$Mdust*1.1*1.6 / new_dust_mass_solar
+  ), 
+  xlab = "Grey body dust mass \n scaled up for total luminosity and total mass in dust",
 )
 
+magplot(
+  grey_body_fits$Mdust*1.1*1.6,
+  new_dust_mass_solar,
+  ylab = "New dust masses from ProSpect \n using the new variable DTH",
+  xlab = "Grey body dust mass \n scaled up for total luminosity and total mass in dust",
+  log = "xy",
+  xlim = c(1e5,1e10),
+  ylim = c(1e5, 1e10)
+)
+abline(0,1)
+legend(
+  x = "bottomright",
+  legend = c(
+   paste0("Median difference (x-y) = ", round(log10(median(grey_body_fits$Mdust*1.1*1.6 / new_dust_mass_solar)),3), " dex")
+  )
+)
