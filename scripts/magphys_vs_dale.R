@@ -287,79 +287,51 @@ magphys_Mass_contribution = approxfun(
   (magphys_standard$BC$WBC+magphys_standard$ISM$WISM+magphys_standard$ISM$CISM)/magphys_standard$Ltot,
   rule = 2
 )
-
-# magplot(
-#   totSED$DustEmit$wave,
-#   magphys_standard$Ltot, 
-#   log = "xy", 
-#   lwd = 6, col = "black", 
-#   type = "l"
-# )
-# lines(
-#   totSED$DustEmit$wave,
-#   magphys_standard$ISM$WISM+magphys_standard$ISM$CISM+magphys_standard$BC$WBC, 
-#   col = "red", lwd = 3
-# )
-
 Dale_M2L_new = sapply(1:64, function(i){
   Msol = 1.989e30
   mH = 1.674e-27
   Lsol = 3.828e26
   DTH = 0.0073
   
-  qPAH_VSG = 0.14
-  weight = pmin(pmax(magphys_Mass_contribution(Dale_Orig$Wave), qPAH_VSG), 1-qPAH_VSG)
-  weight[Dale_Orig$Wave > 1e7] = 1-qPAH_VSG
+  qPAH_VSG = 0.10
+  message("I am using q = ", qPAH_VSG)
+  qBIG = 1 - qPAH_VSG
   
-  # magplot(
-  #   Dale_Orig$Wave,
-  #   weight * DTH,
-  #   log = "x",
-  #   type = "l",
-  #   ylim = c(0, 0.01),
-  #   xlab = "Wavelength [Ang]",
-  #   ylab = "DTH"
-  # )
-  # text(1e4, 0.002, "PAH+VSG")
-  # text(1e7, 0.0065, "Big grains")
-  # abline(h = 0.0073, col = "red")
-  # legend(
-  #   x = "topright",
-  #   lty = 1,
-  #   col = c("black", "red"),
-  #   legend = c("Variable DTH", "Draine+07")
+  # weight = ifelse(
+  #   Dale_Orig$Wave > 2e5, 
+  #   1 - qPAH_VSG,
+  #   qPAH_VSG
   # )
   
-  # foo = Dale_Orig$Aspec[[1]][i,] * Msol/mH/Lsol/(DTH*weight)/Dale_Orig$Wave
+  weight = magphys_Mass_contribution(Dale_Orig$Wave) * (qBIG - qPAH_VSG) + qPAH_VSG
+  weight[Dale_Orig$Wave >  1e7] = qBIG
+
   foo = ( (Dale_Orig$Aspec[[1]][i, ] / Lsol) / (DTH*weight * mH/Msol))/Dale_Orig$Wave
   sum(
     c(0, diff(Dale_Orig$Wave)) * foo
   )
 })
-Dale_M2L_func_new = approxfun(
+Dale_vM2L_func = approxfun(
   Dale_M2L$alpha_SF, Dale_M2L_new, rule = 2
 )
-
-magplot(
-  seq(1,4,0.1), 
-  Dale_M2L_func(seq(1,4,0.1)), 
-  log = "y",
-  ylim = c(50, 9e4)
-)
-lines(
-  seq(1,4,0.1), 
-  Dale_M2L_func_new(seq(1,4,0.1))
+new_M2L_data = list(
+  "magphys_standard" = magphys_standard, 
+  "magphys_Mass_contribution" = magphys_Mass_contribution,
+  "Dale_M2L_new" = Dale_M2L_new,
+  "Dale_vM2L_func" = Dale_vM2L_func
 )
 
-magplot(
-  seq(1,4,0.1),
-  Dale_M2L_func_new(seq(1,4,0.1))/Dale_M2L_func(seq(1,4,0.1))
+new_M2L_DF = data.frame(
+  "wave" = Dale_Orig$Wave,
+  "weight" = magphys_Mass_contribution(Dale_Orig$Wave)
 )
-
-
-dale_mass_birth_corr = dale_dust_lum_birth_samples/Dale_M2L_func_new(alpha_birth_samples)
-dale_mass_screen_corr = dale_dust_lum_screen_samples/Dale_M2L_func_new(alpha_screen_samples)
+saveRDS(new_M2L_data, "~/Documents/DustMassDensity/data/new_M2L_data.rds")
+dale_mass_birth_corr = dale_dust_lum_birth_samples/Dale_vM2L_func(alpha_birth_samples)
+dale_mass_screen_corr = dale_dust_lum_screen_samples/Dale_vM2L_func(alpha_screen_samples)
 dale_mass = dale_mass_screen_corr + dale_mass_birth_corr
+
+Md_corr = median(dale_dust_mass_samples/dale_mass)
+message("Average factor of difference? = ", Md_corr, sep = " ")
 
 dale_spec_samples = as.matrix(foreach(i = 1:Niters, .combine = rbind) %do% {
   prospect_dale_samples[[i]]$lum 
@@ -367,9 +339,6 @@ dale_spec_samples = as.matrix(foreach(i = 1:Niters, .combine = rbind) %do% {
 magphys_spec_samples = as.matrix(foreach(i = 1:Niters, .combine = rbind) %do% {
   magphys_dust_lum[[i]]$Ltot 
 })
-
-Md_corr = median(dale_dust_mass_samples/dale_mass)
-message("Average factor of difference? = ", Md_corr, sep = " ")
 
 df_samples = data.frame(
   "DaleLum" = dale_dust_lum_samples,
@@ -426,9 +395,12 @@ h5write(
 h5write(
   obj = spec_samples, file = h5file, name = "DaleMagphys/Spec"
 )
-# h5delete(h5file, "DaleMagphys/StandardSpec")
 h5write(
   obj = spec_standard, file = h5file, name = "DaleMagphys/StandardSpec"
+)
+# h5delete(h5file, "DaleMagphys/DTHWeight")
+h5write(
+  obj = new_M2L_DF, file = h5file, name = "DaleMagphys/DTHWeight"
 )
 
 simonMagphys = h5read(file = h5file, name = "Photometry/FinalSample")
@@ -464,3 +436,110 @@ maghist(unlist(simonCompare[,3]) - unlist(simonCompare[,4]))
 save.image(
   file = "~/Documents/DustMassDensity/data/magphys_vs_dale.Rdata"
 )
+
+
+# magphys_Mass_SED = approxfun(
+#   totSED$DustEmit$wave,
+#   (magphys_standard$BC$WBC+magphys_standard$ISM$WISM+magphys_standard$ISM$CISM),
+#   rule = 2
+# )
+# Dale_M2L_new_ = sapply(1:64, function(i){
+#   
+#   Msol = 1.989e30
+#   mH = 1.674e-27
+#   Lsol = 3.828e26
+#   DTH = 0.0073
+#   
+#   Dale_ff = Dale_Orig$Aspec[[1]][i, ] / Dale_Orig$Wave
+#   Dale_ff_norm = Dale_ff / sum(
+#     c(0, diff(Dale_Orig$Wave)) * Dale_ff
+#   )
+#   
+#   # wave_idx = Dale_Orig$Wave > Dale_Orig$Wave[which.max(Dale_Orig$Aspec[[1]][i,])] & Dale_Orig$Wave < 1e7
+#   wave_idx = Dale_Orig$Wave > 2e5
+#   
+#   LL = function(parm){
+#     
+#     Temp = parm[1]
+#     # Ldust = parm[2]
+# 
+#     rest_frame = greybody_norm(
+#       wave = Dale_Orig$Wave, 
+#       Temp = Temp, 
+#       beta = 1.5,
+#       z = 0,
+#       norm = 1
+#     )
+#     
+#     likelihood = sum( (((rest_frame[wave_idx]) - (Dale_ff_norm[wave_idx]))/Dale_ff_norm[wave_idx])^2 )
+#     return(likelihood)
+#   }
+#   
+#   opt = optim(
+#     par = c(50),
+#     fn = LL,
+#     method = "L-BFGS-B",
+#     lower = c(5),
+#     upper = c(150),
+#     hessian = TRUE
+#   )
+#   
+#   rest_frame = greybody_norm(
+#     wave = Dale_Orig$Wave, 
+#     Temp = opt$par[1], 
+#     beta = 1.5,
+#     z = 0,
+#     norm = 1
+#   )
+#   # magphys_mass = magphys_Mass_SED(Dale_Orig$Wave)
+#   # magphys_mass_norm = magphys_mass / sum(c(0, diff(Dale_Orig$Wave)) * magphys_mass)
+#   
+#   qPAH_VSG = 0.14
+#   # weight_magphys = pmin(pmax(magphys_Mass_contribution(Dale_Orig$Wave), qPAH_VSG), 1-qPAH_VSG)
+#   # weight_magphys[Dale_Orig$Wave > 1e7] = 1-qPAH_VSG
+#   
+#   png(paste0("~/Documents/DustMassDensity/plots/dale_M2L_new/Dale_", i, ".png"), width = 10, height = 6, units = "in", res = 240)
+#   par(mfrow = c(1,2))
+#   magplot(
+#     Dale_Orig$Wave,
+#     Dale_ff_norm, 
+#     log = "xy", type = "l", lwd = 2, 
+#     xlim = c(1e4, 1e7),
+#     ylim = c(1e-10, 1e-5),
+#     xlab = "Wave [Ang]",
+#     ylab = "Flux"
+#   )
+#   lines(
+#     Dale_Orig$Wave,
+#     rest_frame, 
+#     col = "red"
+#   )
+#   # lines(
+#   #   Dale_Orig$Wave,
+#   #   magphys_mass_norm, 
+#   #   col = "blue"
+#   # )
+#   legend(
+#     x = "bottomleft", 
+#     legend = paste0("alpha = ", Dale_Orig$alpha_SF[i])
+#   )
+#   weight = pmin(pmax(rest_frame/Dale_ff_norm, qPAH_VSG), 1-qPAH_VSG)
+#   magplot(
+#     Dale_Orig$Wave, weight, 
+#     xlim = c(1e4, 1e7),
+#     ylim = c(0,1),
+#     log = "x", type = "l", lwd = 3,
+#     xlab = "Wave [Ang]",
+#     ylab = "DTH weight"
+#   )
+#   weight[Dale_Orig$Wave > Dale_Orig$Wave[which.max(weight)]] = max(weight)
+#   lines(
+#     Dale_Orig$Wave, weight, col = "red", lwd = 1
+#   )
+#   dev.off()
+# 
+#   foo = ( (Dale_Orig$Aspec[[1]][i, ] / Lsol) / (DTH*weight * mH/Msol))/Dale_Orig$Wave
+#   sum(
+#     c(0, diff(Dale_Orig$Wave)) * foo
+#   )
+# })
