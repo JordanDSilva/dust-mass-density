@@ -293,7 +293,7 @@ Dale_M2L_new = sapply(1:64, function(i){
   Lsol = 3.828e26
   DTH = 0.0073
   
-  qPAH_VSG = 0.10
+  qPAH_VSG = 0.14
   message("I am using q = ", qPAH_VSG)
   qBIG = 1 - qPAH_VSG
   

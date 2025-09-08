@@ -600,6 +600,7 @@ magerr(
 )
 abline(0,1)
 
+# RR14_BPL = readRDS("~/Documents/DustMassDensity/data/RR14_BPL.rds")
 new_dust_masses_solar = lapply(prospect_refit_match$stub, function(x){
   message(x)
   foo = readRDS(x)
@@ -613,7 +614,10 @@ new_dust_masses_solar = lapply(prospect_refit_match$stub, function(x){
   lum_screen = foo$parm_sample$DustLumScreen
   lum_birth = foo$parm_sample$DustLumBirth
   
-  new_dust_mass_solar = lum_screen/Dale_vM2L_func(alpha_screen) + lum_birth/Dale_vM2L_func(alpha_birth)
+  # Zfinal = 10^foo$highlander$LD_last$Posterior1[, "Zfinal"]
+  # RR14_DTH = RR14_BPL(Z = Zfinal, doDTG = FALSE)
+  
+  new_dust_mass_solar = (lum_screen/Dale_vM2L_func(alpha_screen) + lum_birth/Dale_vM2L_func(alpha_birth))
   
   bar = c(
     "NewDustMassQ50" = median(new_dust_mass_solar),
@@ -683,7 +687,7 @@ abline(0,1)
 # )
 
 magplot(
-  grey_body_fits$Mdust*1.1*1.6,
+  grey_body_fits$Mdust*1.14*1.6,
   new_dust_masses_solar_DF$NewDustMassQ50,
   ylab = "New dust masses from ProSpect \n using the new variable DTH",
   xlab = "Grey body dust mass \n scaled up for total luminosity and total mass in dust",
@@ -695,7 +699,7 @@ abline(0,1)
 legend(
   x = "bottomright",
   legend = c(
-   paste0("Median difference (x-y) = ", round(log10(median(grey_body_fits$Mdust*1.1*1.6 / new_dust_masses_solar_DF$NewDustMassQ50)),3), " dex")
+   paste0("Median difference (x-y) = ", round(log10(median(grey_body_fits$Mdust*1.14*1.6 / new_dust_masses_solar_DF$NewDustMassQ50)),3), " dex")
   )
 )
 

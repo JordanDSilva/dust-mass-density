@@ -38,13 +38,17 @@ devilsd10_noAGN$area = 1.47
 devilsd10_AGN$area = 1.47
 devilsd10_noAGN = data.frame(devilsd10_noAGN[order(devilsd10_noAGN$UID),])
 devilsd10_AGN = data.frame(devilsd10_AGN[order(devilsd10_AGN$UID),])
+devilsd10_AGN$FIRInput = ifelse( is.na(devilsd10_AGN$FIRInput), 0L, devilsd10_AGN$FIRInput)
+devilsd10_noAGN$FIRInput = devilsd10_AGN$FIRInput
+
 
 ## make a hybrid catalogue
 devilsd10_col_names = c(
   "UID", "z", 
   "StellarMass", "dustmass.birth","dustmass.screen","dustmass.total","dustlum.birth","dustlum.screen","dustlum.total","Zfinal",
   "StellarMass_LB", "dustmass.birth_LB","dustmass.screen_LB","dustmass.total_LB","dustlum.birth_LB","dustlum.screen_LB","dustlum.total_LB","Zfinal_LB",
-  "StellarMass_UB", "dustmass.birth_UB","dustmass.screen_UB","dustmass.total_UB","dustlum.birth_UB","dustlum.screen_UB","dustlum.total_UB","Zfinal_UB"
+  "StellarMass_UB", "dustmass.birth_UB","dustmass.screen_UB","dustmass.total_UB","dustlum.birth_UB","dustlum.screen_UB","dustlum.total_UB","Zfinal_UB",
+  "FIRInput"
 )
 devilsd10_hybrid = devilsd10_noAGN[, devilsd10_col_names]
 devilsd10_AGN_idx = devilsd10_AGN$AGNfrac >= 0.1 & devilsd10_AGN$LP > devilsd10_noAGN$LP
@@ -109,6 +113,7 @@ RR14_BPL = function(Z, doDTG = FALSE){
     return(DTH)
   }
 }
+saveRDS(RR14_BPL, "~/Documents/DustMassDensity/data/RR14_BPL.rds")
 
 zvec = seq(0, 30, 0.01)
 lbtvec = cosdistTravelTime(z = zvec, ref = "Planck18")
@@ -1602,6 +1607,28 @@ combine_hybrid_smf = foreach(i = 1:length(zmids)) %do% {
   dev.off()
   return(ret_)
 }
+## Only FIR DEVILS sources 
+devilsd10_hybrid_cdmh_FIR = (foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_hybrid$z >= zbins[i] & devilsd10_hybrid$z < zbins[i+1] & devilsd10_hybrid$FIRInput == 1
+  Mdust = devilsd10_hybrid$dustmass.total[zidx] * RR14_BPL(Z = 10^devilsd10_hybrid$Zfinal[zidx], doDTG = FALSE)/0.0073
+  
+  df = sum(Mdust) / vol
+  # mc_err = 0.5*(mc_err_devilsd10_hybrid_dmf_corr[[i]][,3] - mc_err_devilsd10_hybrid_dmf_corr[[i]][,2])
+  # 
+  # log_m = log10(Mdust[Mdust > 0])
+  # hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  # bin_dmf = hh$counts/(vol * diff(sm_bins))
+  # pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  # 
+  # err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  # df = data.frame(cbind(bin_dmf, err_dmf))
+  # names(df) = c("phi", "err")
+  # df$x = hh$mids
+  return(df)
+})
+devilsd10_hybrid_cdmh_FIR = data.frame("CDMH_FIR" = unlist(devilsd10_hybrid_cdmh_FIR))
 
 ## Make cosmic
 cdmh_noAGN = data.frame(foreach(i = 1:length(combine_noAGN_dmf), .combine = bind_rows) %do% {
@@ -1879,7 +1906,7 @@ smf_regressed_fits = c(
   sqrt(diag(-1*solve(phi2_Evol$hessian)))
 )
 names(smf_regressed_fits) = c("MstarT1", "MstarT2", "MstarT3", "MstarT1Err", "MstarT2Err", "MstarT3Err", "alphaT1", "alphaT2", "alphaT3", "alphaT1Err", "alphaT2Err", "alphaT3Err", "betaT1", "betaT2", "betaT3", "betaT1Err", "betaT2Err", "betaT3Err", "phi1T1", "phi1T2", "phi1T3", "phi1T1Err", "phi1T2Err", "phi1T3Err", "phi2T1", "phi2T2", "phi2T3", "phi2T1Err", "phi2T2Err", "phi2T3Err")
-smf_regressed_fits = data.frame(smf_regressed_fits)
+smf_regressed_fits = data.frame(t(smf_regressed_fits))
 
 smf_regressed_evol = data.frame(
   "MstarQ50" = colQuantiles(as.matrix(foreach(i = 1:Nsamples, .combine = rbind)%do%{Mstar_Evol_Samples[i,1] + Mstar_Evol_Samples[i,2]*zmids + Mstar_Evol_Samples[i,3]*zmids^2}), probs = 0.50),
@@ -2057,6 +2084,7 @@ h5createGroup(h5file, "cosmic")
 h5write(obj = cdmh_noAGN, file = h5file, name = "cosmic/MdustnoAGN")
 h5write(obj = cdmh_AGN, file = h5file, name = "cosmic/MdustAGN")
 h5write(obj = cdmh_hybrid, file = h5file, name = "cosmic/MdustHybrid")
+h5write(obj = devilsd10_hybrid_cdmh_FIR, file = h5file, name = "cosmic/MdustDEVILSFIR")
 h5write(obj = cdmh_hybrid_corr, file = h5file, name = "cosmic/MdustHybridCorr")
 h5write(obj = cgmh_hybrid_corr, file = h5file, name = "cosmic/MgasHybridCorr")
 h5write(obj = csmh_hybrid, file = h5file, name = "cosmic/MstarHybrid")
