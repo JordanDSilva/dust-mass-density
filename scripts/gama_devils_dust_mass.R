@@ -23,6 +23,11 @@ devilsd10_noAGN = devilsd10_noAGN$cat
 devilsd10_noAGN$area = 1.5
 devilsd10_AGN$area = 1.5
 
+fir_input = devilsd10_AGN$FIRInput
+fir_input[is.na(fir_input)] = 0
+
+sum( fir_input == 1 & devilsd10_AGN$z > 0) /  sum(devilsd10_AGN$z > 0)
+
 RR14_BPL = function(Z, par, doDTG = FALSE){
   
   ## Remy Ruyer+14 using metallicity dependent XCO
