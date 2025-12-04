@@ -79,6 +79,12 @@ df = data.frame(
   data.frame(lambdar_magphys_match)[,grep("^(mass_dust|L_dust|f_mu_IR|xi|T).*best_fit", names(lambdar_magphys_match), value = TRUE, perl = TRUE)]
 )
 
+magplot(
+  log10(profound_prospect_match$DustLum_50),
+  lambdar_magphys_match$L_dust_percentile50
+)
+abline(0,1)
+
 wavelength = c(
   1539, 2316, 3528, 4760, 6326, 7599, 6654, 10229, 12556, 16499, 21571, 
   3.4e4, 4.65e4, 12.8e4, 22.4e4, 98.9e4, 156e4, 249e4, 350e4, 504e4
