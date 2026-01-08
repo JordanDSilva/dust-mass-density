@@ -71,7 +71,7 @@ dunne11 = data.frame(
   "err" = c(0.14, 0.16, 0.29, 0.75, 0.41)*1e5
 )
 fwrite(
-  beeston24, 
+  dunne11, 
   "~/Documents/DustMassDensity/data/literature_evo/cdmh/dunne11.csv"
 )
 
