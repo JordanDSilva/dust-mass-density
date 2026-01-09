@@ -44,6 +44,30 @@ fwrite(
   "~/Documents/DustMassDensity/data/literature_evo/dmf/pozzi20.csv"
 )
 
+berta25 = data.frame(
+  "Mdust" = 10^c(8.50, 8.75, 9.00, 9.25, 8.30, 8.60, 8.90, 9.20, 9.50, 8.18, 8.47, 8.79, 9.05),
+  "phi" = c(13.18, 12.41,5.85,2.93,6.91,6.27,3.16,1.48,0.69,2.64,3.18,1.28,0.82)*1e-5,
+  "phierr" = c(8.98, 7.21, 3.12, 2.17, 3.71, 2.73, 2.47, 1.10, 0.61, 2.34, 1.73, 0.95, 0.55)*1e-5,
+  "z" = c(2, 2, 2, 2, 3.3, 3.3, 3.3, 3.3, 3.3, 5.7, 5.7, 5.7, 5.7),
+  "zmin" = c(1.6, 1.6, 1.6, 1.6, 2.4, 2.4, 2.4, 2.4, 2.4, 4.2, 4.2, 4.2, 4.2),
+  'zmax' = c(2.4, 2.4, 2.4, 2.4, 4.2, 4.2, 4.2, 4.2, 4.2, 7.2, 7.2, 7.2, 7.2)
+)
+fwrite(
+  berta25, 
+  "~/Documents/DustMassDensity/data/literature_evo/dmf/berta25.csv"
+)
+# magplot(
+#   foobar$Mdust[foobar$z == 2.15],
+#   foobar$phi[foobar$z == 2.15], log = "xy", 
+#   xlim = 10^c(6, 11), 
+#   ylim = 10^c(-8, -3)
+# )
+# points(
+#   berta25$Mdust[berta25$z == 2],
+#   berta25$phi[berta25$z == 2], 
+#   pch = 16
+# )
+
 ## CDMH
 pozzi20 = data.frame(
   "z" = c(0.175, 0.325, 0.6, 1, 1.5, 2.15), 
@@ -106,6 +130,32 @@ eales24 <- data.frame(
 fwrite(
   eales24,
   "~/Documents/DustMassDensity/data/literature_evo/cdmh/eales24.csv"
+)
+
+berta25 = data.frame(
+  "z" = c(2, 3.3, 5.7), 
+  "zmin" = c(1.6, 2.4, 4.2),
+  'zmax' = c(2.4, 4.2, 7.2),
+  "cdmh" = c(1.43, 0.64, 0.18)*1e5,
+  "errhi" = c(2.87-1.43, 1.11-0.64, 0.37-0.18)*1e5,
+  "errlo" = c(1.43-0.98, 0.64-0.40, 0.18-0.13)*1e5
+)
+fwrite(
+  berta25,
+  "~/Documents/DustMassDensity/data/literature_evo/cdmh/berta25.csv"
+)
+
+magplot(
+  eales24$z, 
+  eales24$cdmh, 
+  log ="y", 
+  ylim = c(1e4, 1e6), 
+  xlim = c(0, 6)
+)
+points(
+  berta25$z,
+  berta25$cdmh, 
+  pch = 16
 )
 
 walterH2 <- data.frame(
