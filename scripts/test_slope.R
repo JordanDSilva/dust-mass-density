@@ -8,15 +8,6 @@ library(foreach)
 library(matrixStats)
 
 tvec = seq(0, 13, 0.1)
-yy = massfunc_snorm_trunc(
-  age = tvec*1e9, mSFR = 10^5, mpeak = 10, mperiod = 2.0, mskew = 0.5, magemax = 13.8
-)
-magplot(
-  tvec, yy, log = "y", ylim = c(1e4,1e7), xlim = c(0, 13.8)
-)
-lines(
-  tvec, yy
-)
 
 h5file = '~/Documents/DustMassDensity/data/all_data.h5'
 zmids = h5read(file = h5file, name = "zmids")
@@ -51,6 +42,11 @@ eales2024 = data.frame(
     "~/Documents/DustMassDensity/data/literature_evo/cdmh/eales24.csv"
   )
 )
+berta2025 = data.frame(
+  fread(
+    "~/Documents/DustMassDensity/data/literature_evo/cdmh/berta25.csv"
+  )
+)
 chiang2025 = data.frame(
   fread(
     "~/Documents/DustMassDensity/data/literature_evo/cdmh/chiang25.csv"
@@ -64,12 +60,11 @@ chiang2025 = data.frame(
 #   "err" = c(dunne2011$err, pozzi2020$err, beeston2024$err, eales2024$err, 0.5*(chiang2025$errhi+chiang2025$errlo), driver2018$err, mdust$CORR_ERR)
 # )
 lit_combined = data.frame(
-  "z" = c(dunne2011$z, pozzi2020$z, beeston2024$z, eales2024$z, chiang2025$z),
-  "lbt" = cosdistTravelTime(c(dunne2011$z, pozzi2020$z, beeston2024$z, eales2024$z, chiang2025$z), ref = "Planck18"),
-  "cdmh" = c(dunne2011$cdmh, pozzi2020$cdmh, beeston2024$cdmh, eales2024$cdmh, chiang2025$cdmh),
-  "err" = c(dunne2011$err, pozzi2020$err, beeston2024$err, eales2024$err, 0.5*(chiang2025$errhi+chiang2025$errlo))
+  "z" = c(dunne2011$z, pozzi2020$z, beeston2024$z, eales2024$z, berta2025$z, chiang2025$z),
+  "lbt" = cosdistTravelTime(c(dunne2011$z, pozzi2020$z, beeston2024$z, eales2024$z, berta2025$z, chiang2025$z), ref = "Planck18"),
+  "cdmh" = c(dunne2011$cdmh, pozzi2020$cdmh, beeston2024$cdmh, eales2024$cdmh, berta2025$cdmh, chiang2025$cdmh),
+  "err" = c(dunne2011$err, pozzi2020$err, beeston2024$err, eales2024$err, 0.5*(berta2025$errhi+berta2025$errlo), 0.5*(chiang2025$errhi+chiang2025$errlo))
 )
-
 
 LL = function(p, Data){
   mSFR = 10^p[1]
@@ -388,11 +383,11 @@ points(
 magerr(
   driver2018$lbt, driver2018$cdmh, ylo = driver2018$err, pch = 16, col = "darkgreen"
 )
-points(
-  cosdistTravelTime(z = dunne2011$z, ref = "Planck18"), dunne2011$cdmh, pch = 16, col = "red"
-)
-lines(
-  tvec, yy_dunne2011, col = "red"
+# points(
+#   cosdistTravelTime(z = dunne2011$z, ref = "Planck18"), dunne2011$cdmh, pch = 16, col = "red"
+# )
+# lines(
+#   tvec, yy_dunne2011, col = "red"
 )
 # points(
 #   driver2018$lbt, driver2018$cdmh, pch = 16, col = "blue"
