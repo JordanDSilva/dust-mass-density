@@ -334,3 +334,32 @@ fwrite(
   graham07,
   "~/Documents/DustMassDensity/data/literature_evo/cbhh/graham07.csv"
 )
+
+## HI mass function
+zhang21_rawz1 = fread("~/Documents/DustMassDensity/data/literature_evo/gmf/Zhang21_rawz1.csv")
+zhang21_rawz2 = fread("~/Documents/DustMassDensity/data/literature_evo/gmf/Zhang21_rawz2.csv")
+zhang21_raw$z = 0.85
+zhang21_raw$z[28:dim(zhang21_raw)[1]] = 1.20
+zhang21 = data.frame(
+  "MHI" = c(zhang21_rawz1$MHI[1:9], zhang21_rawz2$MHI[1:8]),
+  "phi" = c(zhang21_rawz1$phi[1:9], zhang21_rawz2$phi[1:8]),
+  "philo" = c(zhang21_rawz1$phi[1:9]-zhang21_rawz1$phi[10:18], zhang21_rawz2$phi[1:8]-zhang21_rawz2$phi[9:16]),
+  "phihi" = c(zhang21_rawz1$phi[19:27]-zhang21_rawz1$phi[1:9], zhang21_rawz2$phi[17:24] - zhang21_rawz2$phi[1:8]),
+  "z" = c(rep(0.85, 9), rep(1.20, 8))
+)
+# magplot(
+#   zhang21$MHI[zhang21$z == 0.85], 
+#   zhang21$phi[zhang21$z == 0.85], 
+#   ylim = c(-5.5, 0.5), 
+#   xlim = c(8, 12)
+# )
+# magerr(
+#   zhang21$MHI[zhang21$z == 0.85], 
+#   zhang21$phi[zhang21$z == 0.85], 
+#   ylo = zhang21$philo[zhang21$z == 0.85],
+#   yhi = zhang21$phihi[zhang21$z == 0.85],
+# )
+fwrite(
+  zhang21, 
+  file = "~/Documents/DustMassDensity/data/literature_evo/cdmh/zhang21.csv"
+)

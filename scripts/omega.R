@@ -11,7 +11,7 @@ lbt2z = approxfun(
   lbtvec, zvec
 )
 
-dsilva25 = data.frame(fread("~/Documents/JWSTCATALOGUE/Archive/DSilva25_CSFH_CAGNH_fit.csv"))
+dsilva25 = data.frame(fread("~/Documents/DustMassDensity/data/literature_evo/csfh/DSilva25_CSFH_CAGNH_fit.csv"))
 
 ## Log AGN to BHAR
 agn2bhar = log10( 3.154e7 * 1e-7 * (0.1 * 3e8**2)^-1 / 2e30)
