@@ -105,10 +105,10 @@ RR14_BPL = function(Z, doDTG = FALSE){
   
   ##Mgas = muGal * Mhydrogen
   ## DTG = Mdust / Mgas
-  ## DTH = Mdust / Mhydrogen = Mdust / (Mgas / muGal) = DTG / muGal = DTG / (1 / (1 - Ysol - Zgal))
+  ## DTH = Mdust / Mhydrogen = Mdust / (Mgas / muGal) = DTG * muGal = DTG * (1 / (1 - Ysol - Zgal))
   muGal = 1 / (1 - 0.270 - Z)
   # muGal = (1-Z) / (1 + (4/3))
-  DTH = DTG/muGal
+  DTH = DTG*muGal
   if(doDTG){
     return(DTG)
   }else{
@@ -116,6 +116,31 @@ RR14_BPL = function(Z, doDTG = FALSE){
   }
 }
 saveRDS(RR14_BPL, "~/Documents/DustMassDensity/data/RR14_BPL.rds")
+deVis19_PL = function(Z, doDTG = FALSE){
+  #2.45 * (12+log(O/H)) - 23.30
+  
+  xSol = 8.69
+  ZOH = log10(Z / 0.014) + xSol
+  
+  a = 2.45
+  b = -23.30
+  
+  DTG = 10^(a * ZOH + b)
+  
+  fz = (Z/0.014) * 0.014
+  xiGal = (1 - (0.2485 + fz*1.41) - fz)^-1
+  # muGal = (1-Z) / (1 + (4/3))
+  DTH = DTG*xiGal
+  if(doDTG){
+    return(DTG)
+  }else{
+    return(DTH)
+  }
+}
+
+## Define qPAH early on 
+qPAH_VSG = 0.05
+message("Using qPAH_VSG = ", qPAH_VSG)
 
 # Laod in constant correction factor
 Md_corr = as.numeric(h5read(
@@ -216,6 +241,25 @@ mc_err_gama_AGN_dmf = foreach(i = 1:length(zmids)) %do% {
   }
   hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
 }
+mc_err_gama_hybrid_dmf = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_hybrid$z >= zbins[i] & gama_hybrid$z < zbins[i+1]
+  
+  Mdust = gama_hybrid$DustMass_50[zidx]
+  MdustErr = 0.5 * (gama_hybrid$DustMass_84[zidx] - gama_hybrid$DustMass_16[zidx])
+  
+  samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    m_sample = samples[j,]
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
 mc_err_devilsd10_noAGN_dmf = foreach(i = 1:length(zmids)) %do% {
   message(i)
   vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
@@ -252,25 +296,6 @@ mc_err_devilsd10_AGN_dmf = foreach(i = 1:length(zmids)) %do% {
   }
   hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
 }
-mc_err_gama_hybrid_dmf = foreach(i = 1:length(zmids)) %do% {
-  message(i)
-  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
-  zidx = gama_hybrid$z >= zbins[i] & gama_hybrid$z < zbins[i+1]
-  
-  Mdust = gama_hybrid$DustMass_50[zidx]
-  MdustErr = 0.5 * (gama_hybrid$DustMass_84[zidx] - gama_hybrid$DustMass_16[zidx])
-  
-  samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
-  
-  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
-    m_sample = samples[j,]
-    log_m_sample = log10(m_sample[m_sample > 0])
-    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
-    bin_dmf = hh$counts/(vol * diff(sm_bins))
-    return(bin_dmf)
-  }
-  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
-}
 mc_err_devilsd10_hybrid_dmf = foreach(i = 1:length(zmids)) %do% {
   message(i)
   vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
@@ -283,6 +308,65 @@ mc_err_devilsd10_hybrid_dmf = foreach(i = 1:length(zmids)) %do% {
   
   hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
     m_sample = samples[j,]
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+
+mc_err_gama_noAGN_dmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_noAGN$z >= zbins[i] & gama_noAGN$z < zbins[i+1]
+  
+  Mdust = gama_noAGN$DustMass_50[zidx]
+  MdustErr = 0.5 * (gama_noAGN$DustMass_84[zidx] - gama_noAGN$DustMass_16[zidx])
+  
+  Ldust = gama_noAGN$DustLum_50[zidx]
+  LdustErr = 0.5 * (gama_noAGN$DustLum_84[zidx] - gama_noAGN$DustLum_16[zidx])
+  
+  Z = gama_noAGN$Zgas_50[zidx]
+  Zerr = 0.5 * (gama_noAGN$Zgas_84[zidx] - gama_noAGN$Zgas_16[zidx])
+  
+  Mdust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Ldust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Ldust, sd = LdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Z_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = log10(Z), sd = Zerr/(Z*log(10))), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
+    m_sample = new_dust_sample * RR14_BPL(Z = 10^Z_samples[j,])/0.0073
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+mc_err_gama_AGN_dmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_AGN$z >= zbins[i] & gama_AGN$z < zbins[i+1]
+  
+  Mdust = gama_AGN$DustMass_50[zidx]
+  MdustErr = 0.5 * (gama_AGN$DustMass_84[zidx] - gama_AGN$DustMass_16[zidx])
+  
+  Ldust = gama_AGN$DustLum_50[zidx]
+  LdustErr = 0.5 * (gama_AGN$DustLum_84[zidx] - gama_AGN$DustLum_16[zidx])
+  
+  Z = gama_AGN$Zgas_50[zidx]
+  Zerr = 0.5 * (gama_AGN$Zgas_84[zidx] - gama_AGN$Zgas_16[zidx])
+  
+  Mdust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Ldust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Ldust, sd = LdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Z_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = log10(Z), sd = Zerr/(Z*log(10))), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
+    m_sample = new_dust_sample * RR14_BPL(Z = 10^Z_samples[j,])/0.0073
     log_m_sample = log10(m_sample[m_sample > 0])
     hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
     bin_dmf = hh$counts/(vol * diff(sm_bins))
@@ -310,7 +394,94 @@ mc_err_gama_hybrid_dmf_corr = foreach(i = 1:length(zmids)) %do% {
 
   hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
     alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
-    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample)
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
+    m_sample = new_dust_sample * RR14_BPL(Z = 10^Z_samples[j,])/0.0073
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+mc_err_gama_hybrid_dmf_corr_Zsol = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_hybrid$z >= zbins[i] & gama_hybrid$z < zbins[i+1]
+  
+  Mdust = gama_hybrid$DustMass_50[zidx]
+  MdustErr = 0.5 * (gama_hybrid$DustMass_84[zidx] - gama_hybrid$DustMass_16[zidx])
+  
+  Ldust = gama_hybrid$DustLum_50[zidx]
+  LdustErr = 0.5 * (gama_hybrid$DustLum_84[zidx] - gama_hybrid$DustLum_16[zidx])
+  
+  # Z = gama_hybrid$Zgas_50[zidx]
+  # Zerr = 0.5 * (gama_hybrid$Zgas_84[zidx] - gama_hybrid$Zgas_16[zidx])
+  
+  Mdust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Ldust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Ldust, sd = LdustErr), nrow = Nsamples, ncol = sum(zidx))
+  # Z_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = log10(Z), sd = Zerr/(Z*log(10))), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
+    m_sample = new_dust_sample * RR14_BPL(Z = 0.014)/0.0073
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+mc_err_devilsd10_noAGN_dmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_noAGN$z >= zbins[i] & devilsd10_noAGN$z < zbins[i+1]
+  
+  Mdust = devilsd10_noAGN$dustmass.total[zidx]
+  MdustErr = 0.5 * (devilsd10_noAGN$dustmass.total_UB[zidx] - devilsd10_noAGN$dustmass.total_LB[zidx])
+  
+  Ldust = devilsd10_noAGN$dustlum.total[zidx]
+  LdustErr = 0.5 * (devilsd10_noAGN$dustlum.total_UB[zidx] - devilsd10_noAGN$dustlum.total_LB[zidx])
+  
+  Z = devilsd10_noAGN$Zfinal[zidx]
+  Zerr = 0.5 * (devilsd10_noAGN$Zfinal_UB[zidx] - devilsd10_noAGN$Zfinal_LB[zidx])
+  
+  Mdust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Ldust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Ldust, sd = LdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Z_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Z, sd = Zerr), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
+    m_sample = new_dust_sample * RR14_BPL(Z = 10^Z_samples[j,])/0.0073
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+mc_err_devilsd10_AGN_dmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_AGN$z >= zbins[i] & devilsd10_AGN$z < zbins[i+1]
+  
+  Mdust = devilsd10_AGN$dustmass.total[zidx]
+  MdustErr = 0.5 * (devilsd10_AGN$dustmass.total_UB[zidx] - devilsd10_AGN$dustmass.total_LB[zidx])
+  
+  Ldust = devilsd10_AGN$dustlum.total[zidx]
+  LdustErr = 0.5 * (devilsd10_AGN$dustlum.total_UB[zidx] - devilsd10_AGN$dustlum.total_LB[zidx])
+  
+  Z = devilsd10_AGN$Zfinal[zidx]
+  Zerr = 0.5 * (devilsd10_AGN$Zfinal_UB[zidx] - devilsd10_AGN$Zfinal_LB[zidx])
+  
+  Mdust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Ldust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Ldust, sd = LdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Z_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Z, sd = Zerr), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
     m_sample = new_dust_sample * RR14_BPL(Z = 10^Z_samples[j,])/0.0073
     log_m_sample = log10(m_sample[m_sample > 0])
     hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
@@ -339,8 +510,96 @@ mc_err_devilsd10_hybrid_dmf_corr = foreach(i = 1:length(zmids)) %do% {
 
   hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
     alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
-    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample)
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
     m_sample = new_dust_sample * RR14_BPL(Z = 10^Z_samples[j,])/0.0073
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+mc_err_devilsd10_hybrid_dmf_corr_Zsol = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_hybrid$z >= zbins[i] & devilsd10_hybrid$z < zbins[i+1]
+  
+  Mdust = devilsd10_hybrid$dustmass.total[zidx]
+  MdustErr = 0.5 * (devilsd10_hybrid$dustmass.total_UB[zidx] - devilsd10_hybrid$dustmass.total_LB[zidx])
+  
+  Ldust = devilsd10_hybrid$dustlum.total[zidx]
+  LdustErr = 0.5 * (devilsd10_hybrid$dustlum.total_UB[zidx] - devilsd10_hybrid$dustlum.total_LB[zidx])
+  
+  # Z = devilsd10_hybrid$Zfinal[zidx]
+  # Zerr = 0.5 * (devilsd10_hybrid$Zfinal_UB[zidx] - devilsd10_hybrid$Zfinal_LB[zidx])
+  
+  Mdust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Ldust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Ldust, sd = LdustErr), nrow = Nsamples, ncol = sum(zidx))
+  # Z_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Z, sd = Zerr), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
+    m_sample = new_dust_sample * RR14_BPL(Z = 0.014)/0.0073
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+
+mc_err_gama_noAGN_gmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_noAGN$z >= zbins[i] & gama_noAGN$z < zbins[i+1]
+  
+  Mdust = gama_noAGN$DustMass_50[zidx]
+  MdustErr = 0.5 * (gama_noAGN$DustMass_84[zidx] - gama_noAGN$DustMass_16[zidx])
+  
+  Ldust = gama_noAGN$DustLum_50[zidx]
+  LdustErr = 0.5 * (gama_noAGN$DustLum_84[zidx] - gama_noAGN$DustLum_16[zidx])
+  
+  Z = gama_noAGN$Zgas_50[zidx]
+  Zerr = 0.5 * (gama_noAGN$Zgas_84[zidx] - gama_noAGN$Zgas_16[zidx])
+  
+  Mdust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Ldust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Ldust, sd = LdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Z_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = log10(Z), sd = Zerr/(Z*log(10))), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
+    m_sample = new_dust_sample * RR14_BPL(Z = 10^Z_samples[j,])/0.0073/RR14_BPL(Z = 10^Z_samples[j,], doDTG = TRUE)
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+mc_err_gama_AGN_gmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_AGN$z >= zbins[i] & gama_AGN$z < zbins[i+1]
+  
+  Mdust = gama_AGN$DustMass_50[zidx]
+  MdustErr = 0.5 * (gama_AGN$DustMass_84[zidx] - gama_AGN$DustMass_16[zidx])
+  
+  Ldust = gama_AGN$DustLum_50[zidx]
+  LdustErr = 0.5 * (gama_AGN$DustLum_84[zidx] - gama_AGN$DustLum_16[zidx])
+  
+  Z = gama_AGN$Zgas_50[zidx]
+  Zerr = 0.5 * (gama_AGN$Zgas_84[zidx] - gama_AGN$Zgas_16[zidx])
+  
+  Mdust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Ldust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Ldust, sd = LdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Z_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = log10(Z), sd = Zerr/(Z*log(10))), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
+    m_sample = new_dust_sample * RR14_BPL(Z = 10^Z_samples[j,])/0.0073/RR14_BPL(Z = 10^Z_samples[j,], doDTG = TRUE)
     log_m_sample = log10(m_sample[m_sample > 0])
     hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
     bin_dmf = hh$counts/(vol * diff(sm_bins))
@@ -368,7 +627,65 @@ mc_err_gama_hybrid_gmf_corr = foreach(i = 1:length(zmids)) %do% {
   
   hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
     alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
-    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample)
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
+    m_sample = new_dust_sample * RR14_BPL(Z = 10^Z_samples[j,])/0.0073/RR14_BPL(Z = 10^Z_samples[j,], doDTG = TRUE)
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+mc_err_devilsd10_noAGN_gmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_noAGN$z >= zbins[i] & devilsd10_noAGN$z < zbins[i+1]
+  
+  Mdust = devilsd10_noAGN$dustmass.total[zidx]
+  MdustErr = 0.5 * (devilsd10_noAGN$dustmass.total_UB[zidx] - devilsd10_noAGN$dustmass.total_LB[zidx])
+  
+  Ldust = devilsd10_noAGN$dustlum.total[zidx]
+  LdustErr = 0.5 * (devilsd10_noAGN$dustlum.total_UB[zidx] - devilsd10_noAGN$dustlum.total_LB[zidx])
+  
+  Z = devilsd10_noAGN$Zfinal[zidx]
+  Zerr = 0.5 * (devilsd10_noAGN$Zfinal_UB[zidx] - devilsd10_noAGN$Zfinal_LB[zidx])
+  
+  Mdust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Ldust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Ldust, sd = LdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Z_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Z, sd = Zerr), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
+    m_sample = new_dust_sample * RR14_BPL(Z = 10^Z_samples[j,])/0.0073/RR14_BPL(Z = 10^Z_samples[j,], doDTG = TRUE)
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+mc_err_devilsd10_AGN_gmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_AGN$z >= zbins[i] & devilsd10_AGN$z < zbins[i+1]
+  
+  Mdust = devilsd10_AGN$dustmass.total[zidx]
+  MdustErr = 0.5 * (devilsd10_AGN$dustmass.total_UB[zidx] - devilsd10_AGN$dustmass.total_LB[zidx])
+  
+  Ldust = devilsd10_AGN$dustlum.total[zidx]
+  LdustErr = 0.5 * (devilsd10_AGN$dustlum.total_UB[zidx] - devilsd10_AGN$dustlum.total_LB[zidx])
+  
+  Z = devilsd10_AGN$Zfinal[zidx]
+  Zerr = 0.5 * (devilsd10_AGN$Zfinal_UB[zidx] - devilsd10_AGN$Zfinal_LB[zidx])
+  
+  Mdust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Ldust_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Ldust, sd = LdustErr), nrow = Nsamples, ncol = sum(zidx))
+  Z_samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Z, sd = Zerr), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
     m_sample = new_dust_sample * RR14_BPL(Z = 10^Z_samples[j,])/0.0073/RR14_BPL(Z = 10^Z_samples[j,], doDTG = TRUE)
     log_m_sample = log10(m_sample[m_sample > 0])
     hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
@@ -397,8 +714,47 @@ mc_err_devilsd10_hybrid_gmf_corr = foreach(i = 1:length(zmids)) %do% {
   
   hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
     alpha_sample = Dale_L2M(Ldust_samples[j,]/Mdust_samples[j,])
-    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample)
+    new_dust_sample = Ldust_samples[j,] / Dale_M2L_variableDTH_func(alpha_sample, qPAH_VSG = qPAH_VSG)
     m_sample = new_dust_sample * RR14_BPL(Z = 10^Z_samples[j,])/0.0073/RR14_BPL(Z = 10^Z_samples[j,], doDTG = TRUE)
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+
+mc_err_gama_noAGN_smf = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_noAGN$z >= zbins[i] & gama_noAGN$z < zbins[i+1]
+  
+  Mdust = gama_noAGN$StellarMass_50[zidx]
+  MdustErr = 0.5 * (gama_noAGN$StellarMass_84[zidx] - gama_noAGN$StellarMass_84[zidx])
+  
+  samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    m_sample = samples[j,]
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+mc_err_gama_AGN_smf = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_AGN$z >= zbins[i] & gama_AGN$z < zbins[i+1]
+  
+  Mdust = gama_AGN$StellarMass_50[zidx]
+  MdustErr = 0.5 * (gama_AGN$StellarMass_84[zidx] - gama_AGN$StellarMass_84[zidx])
+  
+  samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    m_sample = samples[j,]
     log_m_sample = log10(m_sample[m_sample > 0])
     hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
     bin_dmf = hh$counts/(vol * diff(sm_bins))
@@ -413,6 +769,44 @@ mc_err_gama_hybrid_smf = foreach(i = 1:length(zmids)) %do% {
   
   Mdust = gama_hybrid$StellarMass_50[zidx]
   MdustErr = 0.5 * (gama_hybrid$StellarMass_84[zidx] - gama_hybrid$StellarMass_84[zidx])
+  
+  samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    m_sample = samples[j,]
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+mc_err_devilsd10_noAGN_smf = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_noAGN$z >= zbins[i] & devilsd10_noAGN$z < zbins[i+1]
+  
+  Mdust = devilsd10_noAGN$StellarMass[zidx]
+  MdustErr = 0.5 * (devilsd10_noAGN$StellarMass_UB[zidx] - devilsd10_noAGN$StellarMass_LB[zidx])
+  
+  samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
+  
+  hist_samples = foreach(j = 1:Nsamples, .combine = "rbind") %do% {
+    m_sample = samples[j,]
+    log_m_sample = log10(m_sample[m_sample > 0])
+    hh = maghist(x = log_m_sample, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+    bin_dmf = hh$counts/(vol * diff(sm_bins))
+    return(bin_dmf)
+  }
+  hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
+}
+mc_err_devilsd10_AGN_smf = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_AGN$z >= zbins[i] & devilsd10_AGN$z < zbins[i+1]
+  
+  Mdust = devilsd10_AGN$StellarMass[zidx]
+  MdustErr = 0.5 * (devilsd10_AGN$StellarMass_UB[zidx] - devilsd10_AGN$StellarMass_LB[zidx])
   
   samples = matrix(rnorm(n = Nsamples*sum(zidx), mean = Mdust, sd = MdustErr), nrow = Nsamples, ncol = sum(zidx))
   
@@ -445,8 +839,23 @@ mc_err_devilsd10_hybrid_smf = foreach(i = 1:length(zmids)) %do% {
   hist_quant = colQuantiles(hist_samples, probs = c(0.5, 0.16, 0.84))
 }
 
+## Save the mc_errs
+save(
+  mc_err_gama_noAGN_dmf, mc_err_gama_AGN_dmf, mc_err_gama_hybrid_dmf,
+  mc_err_devilsd10_noAGN_dmf, mc_err_devilsd10_AGN_dmf, mc_err_devilsd10_hybrid_dmf, 
+  mc_err_gama_noAGN_dmf_corr, mc_err_gama_AGN_dmf_corr, mc_err_gama_hybrid_dmf_corr, 
+  mc_err_devilsd10_noAGN_dmf_corr, mc_err_devilsd10_AGN_dmf_corr, mc_err_devilsd10_hybrid_dmf_corr, 
+  mc_err_gama_noAGN_gmf_corr, mc_err_gama_AGN_gmf_corr, mc_err_gama_hybrid_gmf_corr, 
+  mc_err_devilsd10_noAGN_gmf_corr, mc_err_devilsd10_AGN_gmf_corr, mc_err_devilsd10_hybrid_gmf_corr, 
+  mc_err_gama_noAGN_smf, mc_err_gama_AGN_smf, mc_err_gama_hybrid_smf, 
+  mc_err_devilsd10_noAGN_smf, mc_err_devilsd10_AGN_smf, mc_err_devilsd10_hybrid_smf,
+  file = "~/Documents/DustMassDensity/data/dmf_mc_errs.Rdata"
+)
+load("~/Documents/DustMassDensity/data/dmf_mc_errs.Rdata")
+
 # Use constant corr factor for GAMA and alpha corrections for DEVILS
 err_floor = 0.1
+do_MC_err = 1.0 # make 1 to do 
 gama_noAGN_dmf = foreach(i = 1:length(zmids)) %do% {
   message(i)
   vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
@@ -459,7 +868,7 @@ gama_noAGN_dmf = foreach(i = 1:length(zmids)) %do% {
   bin_dmf = hh$counts/(vol * diff(sm_bins))
   pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   
-  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   df = data.frame(cbind(bin_dmf, err_dmf))
   names(df) = c("phi", "err")
   df$x = hh$mids
@@ -477,7 +886,7 @@ gama_AGN_dmf = foreach(i = 1:length(zmids)) %do% {
   bin_dmf = hh$counts/(vol * diff(sm_bins))
   pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   
-  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   df = data.frame(cbind(bin_dmf, err_dmf))
   names(df) = c("phi", "err")
   df$x = hh$mids
@@ -495,7 +904,7 @@ devilsd10_noAGN_dmf = foreach(i = 1:length(zmids)) %do% {
   bin_dmf = hh$counts/(vol * diff(sm_bins))
   pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   
-  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   df = data.frame(cbind(bin_dmf, err_dmf))
   names(df) = c("phi", "err")
   df$x = hh$mids
@@ -513,7 +922,7 @@ devilsd10_AGN_dmf = foreach(i = 1:length(zmids)) %do% {
   bin_dmf = hh$counts/(vol * diff(sm_bins))
   pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   
-  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   df = data.frame(cbind(bin_dmf, err_dmf))
   names(df) = c("phi", "err")
   df$x = hh$mids
@@ -531,7 +940,7 @@ gama_hybrid_dmf = foreach(i = 1:length(zmids)) %do% {
   bin_dmf = hh$counts/(vol * diff(sm_bins))
   pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   
-  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   df = data.frame(cbind(bin_dmf, err_dmf))
   names(df) = c("phi", "err")
   df$x = hh$mids
@@ -549,20 +958,64 @@ devilsd10_hybrid_dmf = foreach(i = 1:length(zmids)) %do% {
   bin_dmf = hh$counts/(vol * diff(sm_bins))
   pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   
-  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   df = data.frame(cbind(bin_dmf, err_dmf))
   names(df) = c("phi", "err")
   df$x = hh$mids
   return(df)
 }
 
+gama_noAGN_dmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_noAGN$z >= zbins[i] & gama_noAGN$z < zbins[i+1]
+  
+  gama_alpha = Dale_L2M(gama_noAGN$DustLum_50[zidx]/gama_noAGN$DustMass_50[zidx])
+  Mdust_new = gama_noAGN$DustLum_50[zidx]/Dale_M2L_variableDTH_func(gama_alpha, qPAH_VSG = qPAH_VSG)
+  
+  Mdust = Mdust_new * RR14_BPL(Z = gama_noAGN$Zgas_50[zidx], doDTG = FALSE)/0.0073
+  mc_err = 0.5*(mc_err_gama_noAGN_dmf_corr[[i]][,3] - mc_err_gama_noAGN_dmf_corr[[i]][,2])
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
+gama_AGN_dmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_AGN$z >= zbins[i] & gama_AGN$z < zbins[i+1]
+  
+  gama_alpha = Dale_L2M(gama_AGN$DustLum_50[zidx]/gama_AGN$DustMass_50[zidx])
+  Mdust_new = gama_AGN$DustLum_50[zidx]/Dale_M2L_variableDTH_func(gama_alpha, qPAH_VSG = qPAH_VSG)
+  
+  Mdust = Mdust_new * RR14_BPL(Z = gama_AGN$Zgas_50[zidx], doDTG = FALSE)/0.0073
+  mc_err = 0.5*(mc_err_gama_AGN_dmf_corr[[i]][,3] - mc_err_gama_AGN_dmf_corr[[i]][,2])
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
 gama_hybrid_dmf_corr = foreach(i = 1:length(zmids)) %do% {
   message(i)
   vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
   zidx = gama_hybrid$z >= zbins[i] & gama_hybrid$z < zbins[i+1]
   
   gama_alpha = Dale_L2M(gama_hybrid$DustLum_50[zidx]/gama_hybrid$DustMass_50[zidx])
-  Mdust_new = gama_hybrid$DustLum_50[zidx]/Dale_M2L_variableDTH_func(gama_alpha)
+  Mdust_new = gama_hybrid$DustLum_50[zidx]/Dale_M2L_variableDTH_func(gama_alpha, qPAH_VSG = qPAH_VSG)
   
   Mdust = Mdust_new * RR14_BPL(Z = gama_hybrid$Zgas_50[zidx], doDTG = FALSE)/0.0073
   mc_err = 0.5*(mc_err_gama_hybrid_dmf_corr[[i]][,3] - mc_err_gama_hybrid_dmf_corr[[i]][,2])
@@ -572,7 +1025,73 @@ gama_hybrid_dmf_corr = foreach(i = 1:length(zmids)) %do% {
   bin_dmf = hh$counts/(vol * diff(sm_bins))
   pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   
-  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
+gama_hybrid_dmf_corr_Zsol = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_hybrid$z >= zbins[i] & gama_hybrid$z < zbins[i+1]
+  
+  gama_alpha = Dale_L2M(gama_hybrid$DustLum_50[zidx]/gama_hybrid$DustMass_50[zidx])
+  Mdust_new = gama_hybrid$DustLum_50[zidx]/Dale_M2L_variableDTH_func(gama_alpha, qPAH_VSG = qPAH_VSG)
+  
+  Mdust = Mdust_new * RR14_BPL(Z = 0.014, doDTG = FALSE)/0.0073
+  mc_err = 0.5*(mc_err_gama_hybrid_dmf_corr_Zsol[[i]][,3] - mc_err_gama_hybrid_dmf_corr_Zsol[[i]][,2])
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
+devilsd10_noAGN_dmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_noAGN$z >= zbins[i] & devilsd10_noAGN$z < zbins[i+1]
+
+  devils_alpha = Dale_L2M(devilsd10_noAGN$dustlum.total[zidx]/devilsd10_noAGN$dustmass.total[zidx])
+  Mdust_new = devilsd10_noAGN$dustlum.total[zidx]/Dale_M2L_variableDTH_func(devils_alpha, qPAH_VSG = qPAH_VSG)
+  
+  Mdust = Mdust_new * RR14_BPL(Z = 10^devilsd10_noAGN$Zfinal[zidx], doDTG = FALSE)/0.0073
+  mc_err = 0.5*(mc_err_devilsd10_noAGN_dmf_corr[[i]][,3] - mc_err_devilsd10_noAGN_dmf_corr[[i]][,2])
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
+devilsd10_AGN_dmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_AGN$z >= zbins[i] & devilsd10_AGN$z < zbins[i+1]
+  
+  devils_alpha = Dale_L2M(devilsd10_AGN$dustlum.total[zidx]/devilsd10_AGN$dustmass.total[zidx])
+  Mdust_new = devilsd10_AGN$dustlum.total[zidx]/Dale_M2L_variableDTH_func(devils_alpha, qPAH_VSG = qPAH_VSG)
+  
+  Mdust = Mdust_new * RR14_BPL(Z = 10^devilsd10_AGN$Zfinal[zidx], doDTG = FALSE)/0.0073
+  mc_err = 0.5*(mc_err_devilsd10_AGN_dmf_corr[[i]][,3] - mc_err_devilsd10_AGN_dmf_corr[[i]][,2])
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   df = data.frame(cbind(bin_dmf, err_dmf))
   names(df) = c("phi", "err")
   df$x = hh$mids
@@ -586,7 +1105,7 @@ devilsd10_hybrid_dmf_corr = foreach(i = 1:length(zmids)) %do% {
   # Mdust_new = devilsd10_hybrid$dustlum.birth[zidx]/Dale_M2L_variableDTH_func(devilsd10_hybrid$alpha_SF_birth[zidx]) + devilsd10_hybrid$dustlum.screen[zidx]/Dale_M2L_variableDTH_func(devilsd10_hybrid$alpha_SF_screen[zidx])
   # 
   devils_alpha = Dale_L2M(devilsd10_hybrid$dustlum.total[zidx]/devilsd10_hybrid$dustmass.total[zidx])
-  Mdust_new = devilsd10_hybrid$dustlum.total[zidx]/Dale_M2L_variableDTH_func(devils_alpha)
+  Mdust_new = devilsd10_hybrid$dustlum.total[zidx]/Dale_M2L_variableDTH_func(devils_alpha, qPAH_VSG = qPAH_VSG)
   
   ## I think Valid to assume this
   # magplot(
@@ -604,7 +1123,84 @@ devilsd10_hybrid_dmf_corr = foreach(i = 1:length(zmids)) %do% {
   bin_dmf = hh$counts/(vol * diff(sm_bins))
   pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   
-  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
+devilsd10_hybrid_dmf_corr_Zsol = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_hybrid$z >= zbins[i] & devilsd10_hybrid$z < zbins[i+1]
+  
+  # Mdust_new = devilsd10_hybrid$dustlum.birth[zidx]/Dale_M2L_variableDTH_func(devilsd10_hybrid$alpha_SF_birth[zidx]) + devilsd10_hybrid$dustlum.screen[zidx]/Dale_M2L_variableDTH_func(devilsd10_hybrid$alpha_SF_screen[zidx])
+  # 
+  devils_alpha = Dale_L2M(devilsd10_hybrid$dustlum.total[zidx]/devilsd10_hybrid$dustmass.total[zidx])
+  Mdust_new = devilsd10_hybrid$dustlum.total[zidx]/Dale_M2L_variableDTH_func(devils_alpha, qPAH_VSG = qPAH_VSG)
+  
+  ## I think Valid to assume this
+  # magplot(
+  #   Mdust_new, Mdust_new2, log = "xy"
+  # )
+  # maghist(
+  #   Mdust_new/Mdust_new2
+  # )
+  
+  Mdust = Mdust_new * RR14_BPL(Z = 0.014, doDTG = FALSE)/0.0073
+  mc_err = 0.5*(mc_err_devilsd10_hybrid_dmf_corr_Zsol[[i]][,3] - mc_err_devilsd10_hybrid_dmf_corr_Zsol[[i]][,2])
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
+
+gama_noAGN_gmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_noAGN$z >= zbins[i] & gama_noAGN$z < zbins[i+1]
+  
+  gama_alpha = Dale_L2M(gama_noAGN$DustLum_50[zidx]/gama_noAGN$DustMass_50[zidx])
+  Mdust_new = gama_noAGN$DustLum_50[zidx]/Dale_M2L_variableDTH_func(gama_alpha, qPAH_VSG = qPAH_VSG)
+  
+  Mdust = Mdust_new * RR14_BPL(Z = gama_noAGN$Zgas_50[zidx], doDTG = FALSE)/0.0073/RR14_BPL(Z = gama_noAGN$Zgas_50[zidx], doDTG = TRUE)
+  mc_err = 0.5*(mc_err_gama_noAGN_gmf_corr[[i]][,3] - mc_err_gama_noAGN_gmf_corr[[i]][,2]) ## already factors in the error on the dust and the Z so that when we scale the dust the error is unchanged
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
+gama_AGN_gmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_AGN$z >= zbins[i] & gama_AGN$z < zbins[i+1]
+  
+  gama_alpha = Dale_L2M(gama_AGN$DustLum_50[zidx]/gama_AGN$DustMass_50[zidx])
+  Mdust_new = gama_AGN$DustLum_50[zidx]/Dale_M2L_variableDTH_func(gama_alpha, qPAH_VSG = qPAH_VSG)
+  
+  Mdust = Mdust_new * RR14_BPL(Z = gama_AGN$Zgas_50[zidx], doDTG = FALSE)/0.0073/RR14_BPL(Z = gama_AGN$Zgas_50[zidx], doDTG = TRUE)
+  mc_err = 0.5*(mc_err_gama_AGN_gmf_corr[[i]][,3] - mc_err_gama_AGN_gmf_corr[[i]][,2]) ## already factors in the error on the dust and the Z so that when we scale the dust the error is unchanged
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   df = data.frame(cbind(bin_dmf, err_dmf))
   names(df) = c("phi", "err")
   df$x = hh$mids
@@ -616,7 +1212,7 @@ gama_hybrid_gmf_corr = foreach(i = 1:length(zmids)) %do% {
   zidx = gama_hybrid$z >= zbins[i] & gama_hybrid$z < zbins[i+1]
   
   gama_alpha = Dale_L2M(gama_hybrid$DustLum_50[zidx]/gama_hybrid$DustMass_50[zidx])
-  Mdust_new = gama_hybrid$DustLum_50[zidx]/Dale_M2L_variableDTH_func(gama_alpha)
+  Mdust_new = gama_hybrid$DustLum_50[zidx]/Dale_M2L_variableDTH_func(gama_alpha, qPAH_VSG = qPAH_VSG)
   
   Mdust = Mdust_new * RR14_BPL(Z = gama_hybrid$Zgas_50[zidx], doDTG = FALSE)/0.0073/RR14_BPL(Z = gama_hybrid$Zgas_50[zidx], doDTG = TRUE)
   mc_err = 0.5*(mc_err_gama_hybrid_gmf_corr[[i]][,3] - mc_err_gama_hybrid_gmf_corr[[i]][,2]) ## already factors in the error on the dust and the Z so that when we scale the dust the error is unchanged
@@ -626,7 +1222,53 @@ gama_hybrid_gmf_corr = foreach(i = 1:length(zmids)) %do% {
   bin_dmf = hh$counts/(vol * diff(sm_bins))
   pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   
-  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
+devilsd10_noAGN_gmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_noAGN$z >= zbins[i] & devilsd10_noAGN$z < zbins[i+1]
+  
+  devils_alpha = Dale_L2M(devilsd10_noAGN$dustlum.total[zidx]/devilsd10_noAGN$dustmass.total[zidx])
+  Mdust_new = devilsd10_noAGN$dustlum.total[zidx]/Dale_M2L_variableDTH_func(devils_alpha, qPAH_VSG = qPAH_VSG)
+  
+  Mdust = Mdust_new * RR14_BPL(Z = 10^devilsd10_noAGN$Zfinal[zidx], doDTG = FALSE)/0.0073/RR14_BPL(Z = 10^devilsd10_noAGN$Zfinal[zidx], doDTG = TRUE)
+  
+  mc_err = 0.5*(mc_err_devilsd10_noAGN_gmf_corr[[i]][,3] - mc_err_devilsd10_noAGN_gmf_corr[[i]][,2])
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
+devilsd10_AGN_gmf_corr = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_AGN$z >= zbins[i] & devilsd10_AGN$z < zbins[i+1]
+  
+  devils_alpha = Dale_L2M(devilsd10_AGN$dustlum.total[zidx]/devilsd10_AGN$dustmass.total[zidx])
+  Mdust_new = devilsd10_AGN$dustlum.total[zidx]/Dale_M2L_variableDTH_func(devils_alpha, qPAH_VSG = qPAH_VSG)
+  
+  Mdust = Mdust_new * RR14_BPL(Z = 10^devilsd10_AGN$Zfinal[zidx], doDTG = FALSE)/0.0073/RR14_BPL(Z = 10^devilsd10_AGN$Zfinal[zidx], doDTG = TRUE)
+  
+  mc_err = 0.5*(mc_err_devilsd10_AGN_gmf_corr[[i]][,3] - mc_err_devilsd10_AGN_gmf_corr[[i]][,2])
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   df = data.frame(cbind(bin_dmf, err_dmf))
   names(df) = c("phi", "err")
   df$x = hh$mids
@@ -638,7 +1280,7 @@ devilsd10_hybrid_gmf_corr = foreach(i = 1:length(zmids)) %do% {
   zidx = devilsd10_hybrid$z >= zbins[i] & devilsd10_hybrid$z < zbins[i+1]
   
   devils_alpha = Dale_L2M(devilsd10_hybrid$dustlum.total[zidx]/devilsd10_hybrid$dustmass.total[zidx])
-  Mdust_new = devilsd10_hybrid$dustlum.total[zidx]/Dale_M2L_variableDTH_func(devils_alpha)
+  Mdust_new = devilsd10_hybrid$dustlum.total[zidx]/Dale_M2L_variableDTH_func(devils_alpha, qPAH_VSG = qPAH_VSG)
 
   Mdust = Mdust_new * RR14_BPL(Z = 10^devilsd10_hybrid$Zfinal[zidx], doDTG = FALSE)/0.0073/RR14_BPL(Z = 10^devilsd10_hybrid$Zfinal[zidx], doDTG = TRUE)
   
@@ -649,13 +1291,49 @@ devilsd10_hybrid_gmf_corr = foreach(i = 1:length(zmids)) %do% {
   bin_dmf = hh$counts/(vol * diff(sm_bins))
   pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   
-  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   df = data.frame(cbind(bin_dmf, err_dmf))
   names(df) = c("phi", "err")
   df$x = hh$mids
   return(df)
 }
 
+gama_noAGN_smf = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_noAGN$z >= zbins[i] & gama_noAGN$z < zbins[i+1]
+  Mdust = gama_noAGN$StellarMass_50[zidx]
+  mc_err = 0.5*(mc_err_gama_noAGN_smf[[i]][,3] - mc_err_gama_noAGN_smf[[i]][,2])
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
+gama_AGN_smf = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
+  zidx = gama_AGN$z >= zbins[i] & gama_AGN$z < zbins[i+1]
+  Mdust = gama_AGN$StellarMass_50[zidx]
+  mc_err = 0.5*(mc_err_gama_AGN_smf[[i]][,3] - mc_err_gama_AGN_smf[[i]][,2])
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
 gama_hybrid_smf = foreach(i = 1:length(zmids)) %do% {
   message(i)
   vol = vol_mids[i] * 217.54 / (4*pi*(180/pi)^2)
@@ -668,7 +1346,43 @@ gama_hybrid_smf = foreach(i = 1:length(zmids)) %do% {
   bin_dmf = hh$counts/(vol * diff(sm_bins))
   pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   
-  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
+devilsd10_noAGN_smf = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_noAGN$z >= zbins[i] & devilsd10_noAGN$z < zbins[i+1]
+  Mdust = devilsd10_noAGN$StellarMass[zidx]
+  mc_err = 0.5*(mc_err_devilsd10_noAGN_smf[[i]][,3] - mc_err_devilsd10_noAGN_smf[[i]][,2])
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
+  df = data.frame(cbind(bin_dmf, err_dmf))
+  names(df) = c("phi", "err")
+  df$x = hh$mids
+  return(df)
+}
+devilsd10_AGN_smf = foreach(i = 1:length(zmids)) %do% {
+  message(i)
+  vol = vol_mids[i] * 1.47 / (4*pi*(180/pi)^2)
+  zidx = devilsd10_AGN$z >= zbins[i] & devilsd10_AGN$z < zbins[i+1]
+  Mdust = devilsd10_AGN$StellarMass[zidx]
+  mc_err = 0.5*(mc_err_devilsd10_AGN_smf[[i]][,3] - mc_err_devilsd10_AGN_smf[[i]][,2])
+  
+  log_m = log10(Mdust[Mdust > 0])
+  hh = maghist(x = log_m, breaks = sm_bins, plot = FALSE, verbose = FALSE)
+  bin_dmf = hh$counts/(vol * diff(sm_bins))
+  pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
+  
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   df = data.frame(cbind(bin_dmf, err_dmf))
   names(df) = c("phi", "err")
   df$x = hh$mids
@@ -686,7 +1400,7 @@ devilsd10_hybrid_smf = foreach(i = 1:length(zmids)) %do% {
   bin_dmf = hh$counts/(vol * diff(sm_bins))
   pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   
-  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   df = data.frame(cbind(bin_dmf, err_dmf))
   names(df) = c("phi", "err")
   df$x = hh$mids
@@ -694,6 +1408,7 @@ devilsd10_hybrid_smf = foreach(i = 1:length(zmids)) %do% {
 }
 
 ## Fit functions 
+## WHICH = 0L neither, 1L = DEVILS, 2L = GAMA
 combine_noAGN_dmf = foreach(i = 1:length(zmids)) %do% {
   
   gama_dmf = gama_noAGN_dmf[[i]]
@@ -714,16 +1429,16 @@ combine_noAGN_dmf = foreach(i = 1:length(zmids)) %do% {
   combine_dmf = foreach(j = 1:length(sm_mids), .combine = rbind) %do% {
     if( gama_err[j] <= ifelse(devilsd10_err[j]==0, 999, devilsd10_err[j]) ){ ## check if GAMA or DEVILS has better S/N
       if( !gama_idx[j] ){ ## If below GAMA completeness, use devils 
-        c(devilsd10_dmf[j,1], devilsd10_err[j])
+        c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
       }else{ 
         if( (devilsd10_dmf[j,1] - gama_dmf[j,1])/(gama_err[j] + 1e-323) > 5 ){ 
-          c(devilsd10_dmf[j,1], devilsd10_err[j]) ## If above GAMA completeness and devils is more than 5sigma above then use devils
+          c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## If above GAMA completeness and devils is more than 5sigma above then use devils
         }else{
-          c(gama_dmf[j,1], gama_err[j])
+          c(gama_dmf[j,1], gama_err[j], 2L)
         }
       }
     }else{
-      c(devilsd10_dmf[j,1], devilsd10_err[j])
+      c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
     }
   }
   combine_dmf[sm_mids < devilsd10_xlim, ] = 0
@@ -791,7 +1506,7 @@ combine_noAGN_dmf = foreach(i = 1:length(zmids)) %do% {
   df_cosmic$ERR = 0.5 * (df_cosmic$Q84 - df_cosmic$Q16)
   
   combine_dmf = data.frame(combine_dmf)
-  names(combine_dmf) = c("phi", "err")
+  names(combine_dmf) = c("phi", "err", "WHICH")
   combine_dmf$x = sm_mids
   ret_ = list(
     "dmf" = combine_dmf,
@@ -1046,16 +1761,16 @@ combine_hybrid_dmf = foreach(i = 1:length(zmids)) %do% {
   combine_dmf = foreach(j = 1:length(sm_mids), .combine = rbind) %do% {
     if( gama_err[j] <= ifelse(devilsd10_err[j]==0, 999, devilsd10_err[j]) ){ ## check if GAMA or DEVILS has better S/N
       if( !gama_idx[j] ){ ## If below GAMA completeness, use devils 
-        c(devilsd10_dmf[j,1], devilsd10_err[j])
+        c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
       }else{ 
         if( (devilsd10_dmf[j,1] - gama_dmf[j,1])/(gama_err[j] + 1e-323) > 5 ){ 
-          c(devilsd10_dmf[j,1], devilsd10_err[j]) ## If above GAMA completeness and devils is more than 5sigma above then use devils
+          c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## If above GAMA completeness and devils is more than 5sigma above then use devils
         }else{
-          c(gama_dmf[j,1], gama_err[j])
+          c(gama_dmf[j,1], gama_err[j], 2L)
         }
       }
     }else{
-      c(devilsd10_dmf[j,1], devilsd10_err[j])
+      c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
     }
   }
   combine_dmf[sm_mids < devilsd10_xlim, ] = 0
@@ -1122,7 +1837,7 @@ combine_hybrid_dmf = foreach(i = 1:length(zmids)) %do% {
   df_cosmic$ERR = 0.5 * (df_cosmic$Q84 - df_cosmic$Q16)
   
   combine_dmf = data.frame(combine_dmf)
-  names(combine_dmf) = c("phi", "err")
+  names(combine_dmf) = c("phi", "err", "WHICH")
   combine_dmf$x = sm_mids
   
   ret_ = list(
@@ -1133,6 +1848,339 @@ combine_hybrid_dmf = foreach(i = 1:length(zmids)) %do% {
   )
   
   png(paste0("~/Documents/DustMassDensity/plots/dmf_hybrid/lbt_", round(lbt_mids[i],3), ".png"))
+  magplot(
+    NA,
+    log = "y",
+    xlim = c(3.5, 13.5),
+    ylim = c(1e-8, 10),
+    xlab = "Mdust",
+    ylab = "Phi",
+    pch = 1,
+    col = "red"
+  )
+  lines(
+    mdustvec, q50_fit, col = "red"
+  )
+  lines(
+    mdustvec, q16_fit, col = "red", lty = 2
+  )
+  lines(
+    mdustvec, q84_fit, col = "red", lty = 2
+  )
+  points(
+    sm_mids,
+    combine_dmf[,1],
+    pch = 16,
+    cex = 2,
+    col = alpha("red", 0.6)
+  )
+  magerr(
+    sm_mids,
+    combine_dmf[,1],
+    ylo = combine_dmf[,2],
+    col = "red"
+  )
+  points(
+    sm_mids,
+    gama_dmf[,1],
+    pch = "x",
+    col = "purple"
+  )
+  magerr(
+    sm_mids,
+    gama_dmf[,1],
+    ylo = gama_err,
+    col = "purple"
+  )
+  points(
+    sm_mids,
+    devilsd10_dmf[,1],
+    pch = "x",
+    col = "cornflowerblue"
+  )
+  magerr(
+    sm_mids,
+    devilsd10_dmf[,1],
+    ylo = devilsd10_err,
+    col = "cornflowerblue"
+  )
+  dev.off()
+  return(ret_)
+}
+
+combine_noAGN_dmf_corr = foreach(i = 1:length(zmids)) %do% {
+  
+  gama_dmf = gama_noAGN_dmf_corr[[i]]
+  gama_err = gama_dmf[,2]
+  
+  devilsd10_dmf = devilsd10_noAGN_dmf_corr[[i]]
+  devilsd10_err = devilsd10_dmf[,2]
+  
+  gama_xlim = sm_mids[which.max(gama_dmf[,1])]
+  devilsd10_xlim = sm_mids[which.max(devilsd10_dmf[,1])]
+  gama_SN = gama_dmf[,1]/gama_err
+  
+  gama_idx = sm_mids >= gama_xlim
+  devilsd10_idx = sm_mids >= devilsd10_xlim
+  gama_dmf[gama_idx, ]
+  
+  combine_dmf = foreach(j = 1:length(sm_mids), .combine = rbind) %do% {
+    if( gama_err[j] <= ifelse(devilsd10_err[j]==0, 999, devilsd10_err[j]) ){ ## check if GAMA or DEVILS has better S/N
+      if( !gama_idx[j] ){ ## If below GAMA completeness, use devils 
+        c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+      }else{ 
+        if( (devilsd10_dmf[j,1] - gama_dmf[j,1])/(gama_err[j] + 1e-323) > 5 ){ 
+          c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## If above GAMA completeness and devils is more than 5sigma above then use devils
+        }else{
+          c(gama_dmf[j,1], gama_err[j], 2L)
+        }
+      }
+    }else{
+      c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+    }
+  }
+  combine_dmf[sm_mids < devilsd10_xlim, ] = 0
+  
+  pinit = c(10, 0.0, 0.0, -4, -4)
+  highout = Highlander(
+    parm = pinit, 
+    lower = c(5, -2.0, -1.1, -8, -8),
+    upper = c(15, -0.8, 1.5, 1, 1),
+    Data = list(
+      xx = sm_mids[combine_dmf[,1] > 0], 
+      yy = combine_dmf[,1][combine_dmf[,1] > 0], 
+      yyerr = combine_dmf[,2][combine_dmf[,1] > 0], 
+      func = double_schechter, 
+      prior = function(p){
+        sum(
+          # dnorm(p[1], x = 8.0, sd = 4.0, log = TRUE),
+          # dnorm(p[2], x = -1.0, sd = 1.0, log = TRUE),
+          # dnorm(p[3], x = -1.0, sd = 1.0, log = TRUE),
+          # dnorm(p[4], x = -2.0, sd = 4.0, log = TRUE),
+          # dnorm(p[5], x = -3.0, sd = 4.0, log = TRUE),
+          0
+        )
+      }
+    ), 
+    likefunc = LL, 
+    liketype = "max", 
+    Niters = c(Nsamples, Nsamples), 
+    NfinalMCMC = Nsamples, 
+    parm.names = c("Mstar", "alpha1", "alpha2", "phi1", "phi2")
+  )
+  
+  fit_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = "rbind") %do% {
+    double_schechter(mdustvec, p = highout$LD_last$Posterior1[k, ])
+  }
+  q16_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.16
+  )
+  q50_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.50
+  )
+  q84_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.84
+  )
+  
+  df_fit = data.frame(
+    "x" = 10^mdustvec,
+    "Q50" = q50_fit,
+    "Q16" = q16_fit,
+    "Q84" = q84_fit
+  )
+  df_fit$ERR = 0.5*(df_fit$Q84 - df_fit$Q16)
+  
+  df_cosmic_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = c) %do% {
+    trapz(
+      x = mdustvec,
+      y = 10^mdustvec * fit_samples[k,]
+    )
+  }
+  df_cosmic = data.frame(
+    "Q50" = quantile(df_cosmic_samples, probs = 0.5),
+    "Q16" = quantile(df_cosmic_samples, probs = 0.16),
+    "Q84" = quantile(df_cosmic_samples, probs = 0.84)
+  )
+  df_cosmic$ERR = 0.5*(df_cosmic$Q84 - df_cosmic$Q16)
+  
+  combine_dmf = data.frame(combine_dmf)
+  names(combine_dmf) = c("phi", "err", "WHICH")
+  combine_dmf$x = sm_mids
+  
+  ret_ = list(
+    "dmf" = combine_dmf,
+    "fit" = df_fit, 
+    "cosmic" = df_cosmic,
+    "highout" = highout
+  )
+  
+  png(paste0("~/Documents/DustMassDensity/plots/dmf_noAGN_corr/lbt_", round(lbt_mids[i],3), ".png"))
+  magplot(
+    NA,
+    log = "y",
+    xlim = c(3.5, 13.5),
+    ylim = c(1e-8, 10),
+    xlab = "Mdust",
+    ylab = "Phi",
+    pch = 1,
+    col = "red"
+  )
+  lines(
+    mdustvec, q50_fit, col = "red"
+  )
+  lines(
+    mdustvec, q16_fit, col = "red", lty = 2
+  )
+  lines(
+    mdustvec, q84_fit, col = "red", lty = 2
+  )
+  points(
+    sm_mids,
+    combine_dmf[,1],
+    pch = 16,
+    cex = 2,
+    col = alpha("red", 0.6)
+  )
+  magerr(
+    sm_mids,
+    combine_dmf[,1],
+    ylo = combine_dmf[,2],
+    col = "red"
+  )
+  points(
+    sm_mids,
+    gama_dmf[,1],
+    pch = "x",
+    col = "purple"
+  )
+  magerr(
+    sm_mids,
+    gama_dmf[,1],
+    ylo = gama_err,
+    col = "purple"
+  )
+  points(
+    sm_mids,
+    devilsd10_dmf[,1],
+    pch = "x",
+    col = "cornflowerblue"
+  )
+  magerr(
+    sm_mids,
+    devilsd10_dmf[,1],
+    ylo = devilsd10_err,
+    col = "cornflowerblue"
+  )
+  dev.off()
+  return(ret_)
+}
+combine_AGN_dmf_corr = foreach(i = 1:length(zmids)) %do% {
+  
+  gama_dmf = gama_AGN_dmf_corr[[i]]
+  gama_err = gama_dmf[,2]
+  
+  devilsd10_dmf = devilsd10_AGN_dmf_corr[[i]]
+  devilsd10_err = devilsd10_dmf[,2]
+  
+  gama_xlim = sm_mids[which.max(gama_dmf[,1])]
+  devilsd10_xlim = sm_mids[which.max(devilsd10_dmf[,1])]
+  gama_SN = gama_dmf[,1]/gama_err
+  
+  gama_idx = sm_mids >= gama_xlim
+  devilsd10_idx = sm_mids >= devilsd10_xlim
+  gama_dmf[gama_idx, ]
+  
+  combine_dmf = foreach(j = 1:length(sm_mids), .combine = rbind) %do% {
+    if( gama_err[j] <= ifelse(devilsd10_err[j]==0, 999, devilsd10_err[j]) ){ ## check if GAMA or DEVILS has better S/N
+      if( !gama_idx[j] ){ ## If below GAMA completeness, use devils 
+        c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+      }else{ 
+        if( (devilsd10_dmf[j,1] - gama_dmf[j,1])/(gama_err[j] + 1e-323) > 5 ){ 
+          c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## If above GAMA completeness and devils is more than 5sigma above then use devils
+        }else{
+          c(gama_dmf[j,1], gama_err[j], 2L)
+        }
+      }
+    }else{
+      c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+    }
+  }
+  combine_dmf[sm_mids < devilsd10_xlim, ] = 0
+  
+  pinit = c(10, 0.0, 0.0, -4, -4)
+  highout = Highlander(
+    parm = pinit, 
+    lower = c(5, -2.0, -1.1, -8, -8),
+    upper = c(15, -0.8, 1.5, 1, 1),
+    Data = list(
+      xx = sm_mids[combine_dmf[,1] > 0], 
+      yy = combine_dmf[,1][combine_dmf[,1] > 0], 
+      yyerr = combine_dmf[,2][combine_dmf[,1] > 0], 
+      func = double_schechter, 
+      prior = function(p){
+        sum(
+          # dnorm(p[1], x = 8.0, sd = 4.0, log = TRUE),
+          # dnorm(p[2], x = -1.0, sd = 1.0, log = TRUE),
+          # dnorm(p[3], x = -1.0, sd = 1.0, log = TRUE),
+          # dnorm(p[4], x = -2.0, sd = 4.0, log = TRUE),
+          # dnorm(p[5], x = -3.0, sd = 4.0, log = TRUE),
+          0
+        )
+      }
+    ), 
+    likefunc = LL, 
+    liketype = "max", 
+    Niters = c(Nsamples, Nsamples), 
+    NfinalMCMC = Nsamples, 
+    parm.names = c("Mstar", "alpha1", "alpha2", "phi1", "phi2")
+  )
+  
+  fit_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = "rbind") %do% {
+    double_schechter(mdustvec, p = highout$LD_last$Posterior1[k, ])
+  }
+  q16_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.16
+  )
+  q50_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.50
+  )
+  q84_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.84
+  )
+  
+  df_fit = data.frame(
+    "x" = 10^mdustvec,
+    "Q50" = q50_fit,
+    "Q16" = q16_fit,
+    "Q84" = q84_fit
+  )
+  df_fit$ERR = 0.5*(df_fit$Q84 - df_fit$Q16)
+  
+  df_cosmic_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = c) %do% {
+    trapz(
+      x = mdustvec,
+      y = 10^mdustvec * fit_samples[k,]
+    )
+  }
+  df_cosmic = data.frame(
+    "Q50" = quantile(df_cosmic_samples, probs = 0.5),
+    "Q16" = quantile(df_cosmic_samples, probs = 0.16),
+    "Q84" = quantile(df_cosmic_samples, probs = 0.84)
+  )
+  df_cosmic$ERR = 0.5*(df_cosmic$Q84 - df_cosmic$Q16)
+  
+  combine_dmf = data.frame(combine_dmf)
+  names(combine_dmf) = c("phi", "err", "WHICH")
+  combine_dmf$x = sm_mids
+  
+  ret_ = list(
+    "dmf" = combine_dmf,
+    "fit" = df_fit, 
+    "cosmic" = df_cosmic,
+    "highout" = highout
+  )
+  
+  png(paste0("~/Documents/DustMassDensity/plots/dmf_AGN_corr/lbt_", round(lbt_mids[i],3), ".png"))
   magplot(
     NA,
     log = "y",
@@ -1211,16 +2259,16 @@ combine_hybrid_dmf_corr = foreach(i = 1:length(zmids)) %do% {
   combine_dmf = foreach(j = 1:length(sm_mids), .combine = rbind) %do% {
     if( gama_err[j] <= ifelse(devilsd10_err[j]==0, 999, devilsd10_err[j]) ){ ## check if GAMA or DEVILS has better S/N
       if( !gama_idx[j] ){ ## If below GAMA completeness, use devils 
-        c(devilsd10_dmf[j,1], devilsd10_err[j])
+        c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## include check on what data set
       }else{ 
         if( (devilsd10_dmf[j,1] - gama_dmf[j,1])/(gama_err[j] + 1e-323) > 5 ){ 
-          c(devilsd10_dmf[j,1], devilsd10_err[j]) ## If above GAMA completeness and devils is more than 5sigma above then use devils
+          c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## If above GAMA completeness and devils is more than 5sigma above then use devils
         }else{
-          c(gama_dmf[j,1], gama_err[j])
+          c(gama_dmf[j,1], gama_err[j], 2L)
         }
       }
     }else{
-      c(devilsd10_dmf[j,1], devilsd10_err[j])
+      c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
     }
   }
   combine_dmf[sm_mids < devilsd10_xlim, ] = 0
@@ -1288,7 +2336,7 @@ combine_hybrid_dmf_corr = foreach(i = 1:length(zmids)) %do% {
   df_cosmic$ERR = 0.5*(df_cosmic$Q84 - df_cosmic$Q16)
   
   combine_dmf = data.frame(combine_dmf)
-  names(combine_dmf) = c("phi", "err")
+  names(combine_dmf) = c("phi", "err", "WHICH")
   combine_dmf$x = sm_mids
   
   ret_ = list(
@@ -1305,6 +2353,505 @@ combine_hybrid_dmf_corr = foreach(i = 1:length(zmids)) %do% {
     xlim = c(3.5, 13.5),
     ylim = c(1e-8, 10),
     xlab = "Mdust",
+    ylab = "Phi",
+    pch = 1,
+    col = "red"
+  )
+  lines(
+    mdustvec, q50_fit, col = "red"
+  )
+  lines(
+    mdustvec, q16_fit, col = "red", lty = 2
+  )
+  lines(
+    mdustvec, q84_fit, col = "red", lty = 2
+  )
+  points(
+    sm_mids,
+    combine_dmf[,1],
+    pch = 16,
+    cex = 2,
+    col = alpha("red", 0.6)
+  )
+  magerr(
+    sm_mids,
+    combine_dmf[,1],
+    ylo = combine_dmf[,2],
+    col = "red"
+  )
+  points(
+    sm_mids,
+    gama_dmf[,1],
+    pch = "x",
+    col = "purple"
+  )
+  magerr(
+    sm_mids,
+    gama_dmf[,1],
+    ylo = gama_err,
+    col = "purple"
+  )
+  points(
+    sm_mids,
+    devilsd10_dmf[,1],
+    pch = "x",
+    col = "cornflowerblue"
+  )
+  magerr(
+    sm_mids,
+    devilsd10_dmf[,1],
+    ylo = devilsd10_err,
+    col = "cornflowerblue"
+  )
+  dev.off()
+  return(ret_)
+}
+combine_hybrid_dmf_corr_Zsol = foreach(i = 1:length(zmids)) %do% {
+  
+  gama_dmf = gama_hybrid_dmf_corr_Zsol[[i]]
+  gama_err = gama_dmf[,2]
+  
+  devilsd10_dmf = devilsd10_hybrid_dmf_corr_Zsol[[i]]
+  devilsd10_err = devilsd10_dmf[,2]
+  
+  gama_xlim = sm_mids[which.max(gama_dmf[,1])]
+  devilsd10_xlim = sm_mids[which.max(devilsd10_dmf[,1])]
+  gama_SN = gama_dmf[,1]/gama_err
+  
+  gama_idx = sm_mids >= gama_xlim
+  devilsd10_idx = sm_mids >= devilsd10_xlim
+  gama_dmf[gama_idx, ]
+  
+  combine_dmf = foreach(j = 1:length(sm_mids), .combine = rbind) %do% {
+    if( gama_err[j] <= ifelse(devilsd10_err[j]==0, 999, devilsd10_err[j]) ){ ## check if GAMA or DEVILS has better S/N
+      if( !gama_idx[j] ){ ## If below GAMA completeness, use devils 
+        c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## include check on what data set
+      }else{ 
+        if( (devilsd10_dmf[j,1] - gama_dmf[j,1])/(gama_err[j] + 1e-323) > 5 ){ 
+          c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## If above GAMA completeness and devils is more than 5sigma above then use devils
+        }else{
+          c(gama_dmf[j,1], gama_err[j], 2L)
+        }
+      }
+    }else{
+      c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+    }
+  }
+  combine_dmf[sm_mids < devilsd10_xlim, ] = 0
+  
+  pinit = c(10, 0.0, 0.0, -4, -4)
+  highout = Highlander(
+    parm = pinit, 
+    lower = c(5, -2.0, -1.1, -8, -8),
+    upper = c(15, -0.8, 1.5, 1, 1),
+    Data = list(
+      xx = sm_mids[combine_dmf[,1] > 0], 
+      yy = combine_dmf[,1][combine_dmf[,1] > 0], 
+      yyerr = combine_dmf[,2][combine_dmf[,1] > 0], 
+      func = double_schechter, 
+      prior = function(p){
+        sum(
+          # dnorm(p[1], x = 8.0, sd = 4.0, log = TRUE),
+          # dnorm(p[2], x = -1.0, sd = 1.0, log = TRUE),
+          # dnorm(p[3], x = -1.0, sd = 1.0, log = TRUE),
+          # dnorm(p[4], x = -2.0, sd = 4.0, log = TRUE),
+          # dnorm(p[5], x = -3.0, sd = 4.0, log = TRUE),
+          0
+        )
+      }
+    ), 
+    likefunc = LL, 
+    liketype = "max", 
+    Niters = c(Nsamples, Nsamples), 
+    NfinalMCMC = Nsamples, 
+    parm.names = c("Mstar", "alpha1", "alpha2", "phi1", "phi2")
+  )
+  
+  fit_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = "rbind") %do% {
+    double_schechter(mdustvec, p = highout$LD_last$Posterior1[k, ])
+  }
+  q16_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.16
+  )
+  q50_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.50
+  )
+  q84_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.84
+  )
+  
+  df_fit = data.frame(
+    "x" = 10^mdustvec,
+    "Q50" = q50_fit,
+    "Q16" = q16_fit,
+    "Q84" = q84_fit
+  )
+  df_fit$ERR = 0.5*(df_fit$Q84 - df_fit$Q16)
+  
+  df_cosmic_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = c) %do% {
+    trapz(
+      x = mdustvec,
+      y = 10^mdustvec * fit_samples[k,]
+    )
+  }
+  df_cosmic = data.frame(
+    "Q50" = quantile(df_cosmic_samples, probs = 0.5),
+    "Q16" = quantile(df_cosmic_samples, probs = 0.16),
+    "Q84" = quantile(df_cosmic_samples, probs = 0.84)
+  )
+  df_cosmic$ERR = 0.5*(df_cosmic$Q84 - df_cosmic$Q16)
+  
+  combine_dmf = data.frame(combine_dmf)
+  names(combine_dmf) = c("phi", "err", "WHICH")
+  combine_dmf$x = sm_mids
+  
+  ret_ = list(
+    "dmf" = combine_dmf,
+    "fit" = df_fit, 
+    "cosmic" = df_cosmic,
+    "highout" = highout
+  )
+  
+  png(paste0("~/Documents/DustMassDensity/plots/dmf_hybrid_corr_Zsol/lbt_", round(lbt_mids[i],3), ".png"))
+  magplot(
+    NA,
+    log = "y",
+    xlim = c(3.5, 13.5),
+    ylim = c(1e-8, 10),
+    xlab = "Mdust",
+    ylab = "Phi",
+    pch = 1,
+    col = "red"
+  )
+  lines(
+    mdustvec, q50_fit, col = "red"
+  )
+  lines(
+    mdustvec, q16_fit, col = "red", lty = 2
+  )
+  lines(
+    mdustvec, q84_fit, col = "red", lty = 2
+  )
+  points(
+    sm_mids,
+    combine_dmf[,1],
+    pch = 16,
+    cex = 2,
+    col = alpha("red", 0.6)
+  )
+  magerr(
+    sm_mids,
+    combine_dmf[,1],
+    ylo = combine_dmf[,2],
+    col = "red"
+  )
+  points(
+    sm_mids,
+    gama_dmf[,1],
+    pch = "x",
+    col = "purple"
+  )
+  magerr(
+    sm_mids,
+    gama_dmf[,1],
+    ylo = gama_err,
+    col = "purple"
+  )
+  points(
+    sm_mids,
+    devilsd10_dmf[,1],
+    pch = "x",
+    col = "cornflowerblue"
+  )
+  magerr(
+    sm_mids,
+    devilsd10_dmf[,1],
+    ylo = devilsd10_err,
+    col = "cornflowerblue"
+  )
+  dev.off()
+  return(ret_)
+}
+
+combine_noAGN_gmf_corr = foreach(i = 1:length(zmids)) %do% {
+  
+  gama_dmf = gama_noAGN_gmf_corr[[i]]
+  gama_err = gama_dmf[,2]
+  
+  devilsd10_dmf = devilsd10_noAGN_gmf_corr[[i]]
+  devilsd10_err = devilsd10_dmf[,2]
+  
+  gama_xlim = sm_mids[which.max(gama_dmf[,1])]
+  devilsd10_xlim = sm_mids[which.max(devilsd10_dmf[,1])]
+  gama_SN = gama_dmf[,1]/gama_err
+  devilsd10_SN = devilsd10_dmf[,1]/devilsd10_err
+  
+  gama_idx = sm_mids >= gama_xlim
+  devilsd10_idx = sm_mids >= devilsd10_xlim
+  gama_dmf[gama_idx, ]
+  
+  combine_dmf = foreach(j = 1:length(sm_mids), .combine = rbind) %do% {
+    if( gama_err[j] <= ifelse(devilsd10_err[j]==0, 999, devilsd10_err[j]) ){ ## check if GAMA or DEVILS has better S/N
+      if( !gama_idx[j] ){ ## If below GAMA completeness, use devils 
+        c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+      }else{ 
+        if( (devilsd10_dmf[j,1] - gama_dmf[j,1])/(gama_err[j] + 1e-323) > 5 ){ 
+          c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## If above GAMA completeness and devils is more than 5sigma above then use devils
+        }else{
+          c(gama_dmf[j,1], gama_err[j], 2L)
+        }
+      }
+    }else{
+      c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+    }
+  }
+  combine_dmf[sm_mids < devilsd10_xlim, ] = 0
+  
+  pinit = c(10, 0.0, 0.0, -4, -4)
+  highout = Highlander(
+    parm = pinit, 
+    lower = c(5, -2.0, -1.1, -8, -8),
+    upper = c(15, -0.8, 1.5, 1, 1),
+    Data = list(
+      xx = sm_mids[combine_dmf[,1] > 0], 
+      yy = combine_dmf[,1][combine_dmf[,1] > 0], 
+      yyerr = combine_dmf[,2][combine_dmf[,1] > 0], 
+      func = double_schechter, 
+      prior = function(p){
+        sum(
+          # dnorm(p[1], x = 8.0, sd = 4.0, log = TRUE),
+          # dnorm(p[2], x = -1.0, sd = 1.0, log = TRUE),
+          # dnorm(p[3], x = -1.0, sd = 1.0, log = TRUE),
+          # dnorm(p[4], x = -2.0, sd = 4.0, log = TRUE),
+          # dnorm(p[5], x = -3.0, sd = 4.0, log = TRUE),
+          0
+        )
+      }
+    ), 
+    likefunc = LL, 
+    liketype = "max", 
+    Niters = c(Nsamples, Nsamples), 
+    NfinalMCMC = Nsamples, 
+    parm.names = c("Mstar", "alpha1", "alpha2", "phi1", "phi2")
+  )
+  
+  fit_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = "rbind") %do% {
+    double_schechter(mdustvec, p = highout$LD_last$Posterior1[k, ])
+  }
+  q16_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.16
+  )
+  q50_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.50
+  )
+  q84_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.84
+  )
+  
+  df_fit = data.frame(
+    "x" = 10^mdustvec,
+    "Q50" = q50_fit,
+    "Q16" = q16_fit,
+    "Q84" = q84_fit
+  )
+  df_fit$ERR = 0.5*(df_fit$Q84 - df_fit$Q16)
+  df_cosmic_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = c) %do% {
+    trapz(
+      x = mdustvec,
+      y = 10^mdustvec * fit_samples[k,]
+    )
+  }
+  df_cosmic = data.frame(
+    "Q50" = quantile(df_cosmic_samples, probs = 0.5),
+    "Q16" = quantile(df_cosmic_samples, probs = 0.16),
+    "Q84" = quantile(df_cosmic_samples, probs = 0.84)
+  )
+  df_cosmic$ERR = 0.5 * (df_cosmic$Q84 - df_cosmic$Q16)
+  
+  combine_dmf = data.frame(combine_dmf)
+  names(combine_dmf) = c("phi", "err", "WHICH")
+  combine_dmf$x = sm_mids
+  
+  ret_ = list(
+    "dmf" = combine_dmf,
+    "fit" = df_fit, 
+    "cosmic" = df_cosmic,
+    "highout" = highout
+  )
+  
+  png(paste0("~/Documents/DustMassDensity/plots/gmf_noAGN_corr/lbt_", round(lbt_mids[i],3), ".png"))
+  magplot(
+    NA,
+    log = "y",
+    xlim = c(3.5, 13.5),
+    ylim = c(1e-8, 10),
+    xlab = "Mgas",
+    ylab = "Phi",
+    pch = 1,
+    col = "red"
+  )
+  lines(
+    mdustvec, q50_fit, col = "red"
+  )
+  lines(
+    mdustvec, q16_fit, col = "red", lty = 2
+  )
+  lines(
+    mdustvec, q84_fit, col = "red", lty = 2
+  )
+  points(
+    sm_mids,
+    combine_dmf[,1],
+    pch = 16,
+    cex = 2,
+    col = alpha("red", 0.6)
+  )
+  magerr(
+    sm_mids,
+    combine_dmf[,1],
+    ylo = combine_dmf[,2],
+    col = "red"
+  )
+  points(
+    sm_mids,
+    gama_dmf[,1],
+    pch = "x",
+    col = "purple"
+  )
+  magerr(
+    sm_mids,
+    gama_dmf[,1],
+    ylo = gama_err,
+    col = "purple"
+  )
+  points(
+    sm_mids,
+    devilsd10_dmf[,1],
+    pch = "x",
+    col = "cornflowerblue"
+  )
+  magerr(
+    sm_mids,
+    devilsd10_dmf[,1],
+    ylo = devilsd10_err,
+    col = "cornflowerblue"
+  )
+  dev.off()
+  return(ret_)
+}
+combine_AGN_gmf_corr = foreach(i = 1:length(zmids)) %do% {
+  
+  gama_dmf = gama_AGN_gmf_corr[[i]]
+  gama_err = gama_dmf[,2]
+  
+  devilsd10_dmf = devilsd10_AGN_gmf_corr[[i]]
+  devilsd10_err = devilsd10_dmf[,2]
+  
+  gama_xlim = sm_mids[which.max(gama_dmf[,1])]
+  devilsd10_xlim = sm_mids[which.max(devilsd10_dmf[,1])]
+  gama_SN = gama_dmf[,1]/gama_err
+  devilsd10_SN = devilsd10_dmf[,1]/devilsd10_err
+  
+  gama_idx = sm_mids >= gama_xlim
+  devilsd10_idx = sm_mids >= devilsd10_xlim
+  gama_dmf[gama_idx, ]
+  
+  combine_dmf = foreach(j = 1:length(sm_mids), .combine = rbind) %do% {
+    if( gama_err[j] <= ifelse(devilsd10_err[j]==0, 999, devilsd10_err[j]) ){ ## check if GAMA or DEVILS has better S/N
+      if( !gama_idx[j] ){ ## If below GAMA completeness, use devils 
+        c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+      }else{ 
+        if( (devilsd10_dmf[j,1] - gama_dmf[j,1])/(gama_err[j] + 1e-323) > 5 ){ 
+          c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## If above GAMA completeness and devils is more than 5sigma above then use devils
+        }else{
+          c(gama_dmf[j,1], gama_err[j], 2L)
+        }
+      }
+    }else{
+      c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+    }
+  }
+  combine_dmf[sm_mids < devilsd10_xlim, ] = 0
+  
+  pinit = c(10, 0.0, 0.0, -4, -4)
+  highout = Highlander(
+    parm = pinit, 
+    lower = c(5, -2.0, -1.1, -8, -8),
+    upper = c(15, -0.8, 1.5, 1, 1),
+    Data = list(
+      xx = sm_mids[combine_dmf[,1] > 0], 
+      yy = combine_dmf[,1][combine_dmf[,1] > 0], 
+      yyerr = combine_dmf[,2][combine_dmf[,1] > 0], 
+      func = double_schechter, 
+      prior = function(p){
+        sum(
+          # dnorm(p[1], x = 8.0, sd = 4.0, log = TRUE),
+          # dnorm(p[2], x = -1.0, sd = 1.0, log = TRUE),
+          # dnorm(p[3], x = -1.0, sd = 1.0, log = TRUE),
+          # dnorm(p[4], x = -2.0, sd = 4.0, log = TRUE),
+          # dnorm(p[5], x = -3.0, sd = 4.0, log = TRUE),
+          0
+        )
+      }
+    ), 
+    likefunc = LL, 
+    liketype = "max", 
+    Niters = c(Nsamples, Nsamples), 
+    NfinalMCMC = Nsamples, 
+    parm.names = c("Mstar", "alpha1", "alpha2", "phi1", "phi2")
+  )
+  
+  fit_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = "rbind") %do% {
+    double_schechter(mdustvec, p = highout$LD_last$Posterior1[k, ])
+  }
+  q16_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.16
+  )
+  q50_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.50
+  )
+  q84_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.84
+  )
+  
+  df_fit = data.frame(
+    "x" = 10^mdustvec,
+    "Q50" = q50_fit,
+    "Q16" = q16_fit,
+    "Q84" = q84_fit
+  )
+  df_fit$ERR = 0.5*(df_fit$Q84 - df_fit$Q16)
+  df_cosmic_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = c) %do% {
+    trapz(
+      x = mdustvec,
+      y = 10^mdustvec * fit_samples[k,]
+    )
+  }
+  df_cosmic = data.frame(
+    "Q50" = quantile(df_cosmic_samples, probs = 0.5),
+    "Q16" = quantile(df_cosmic_samples, probs = 0.16),
+    "Q84" = quantile(df_cosmic_samples, probs = 0.84)
+  )
+  df_cosmic$ERR = 0.5 * (df_cosmic$Q84 - df_cosmic$Q16)
+  
+  combine_dmf = data.frame(combine_dmf)
+  names(combine_dmf) = c("phi", "err")
+  combine_dmf$x = sm_mids
+  
+  ret_ = list(
+    "dmf" = combine_dmf,
+    "fit" = df_fit, 
+    "cosmic" = df_cosmic,
+    "highout" = highout
+  )
+  
+  png(paste0("~/Documents/DustMassDensity/plots/gmf_AGN_corr/lbt_", round(lbt_mids[i],3), ".png"))
+  magplot(
+    NA,
+    log = "y",
+    xlim = c(3.5, 13.5),
+    ylim = c(1e-8, 10),
+    xlab = "Mgas",
     ylab = "Phi",
     pch = 1,
     col = "red"
@@ -1378,16 +2925,16 @@ combine_hybrid_gmf_corr = foreach(i = 1:length(zmids)) %do% {
   combine_dmf = foreach(j = 1:length(sm_mids), .combine = rbind) %do% {
     if( gama_err[j] <= ifelse(devilsd10_err[j]==0, 999, devilsd10_err[j]) ){ ## check if GAMA or DEVILS has better S/N
       if( !gama_idx[j] ){ ## If below GAMA completeness, use devils 
-        c(devilsd10_dmf[j,1], devilsd10_err[j])
+        c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
       }else{ 
         if( (devilsd10_dmf[j,1] - gama_dmf[j,1])/(gama_err[j] + 1e-323) > 5 ){ 
-          c(devilsd10_dmf[j,1], devilsd10_err[j]) ## If above GAMA completeness and devils is more than 5sigma above then use devils
+          c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## If above GAMA completeness and devils is more than 5sigma above then use devils
         }else{
-          c(gama_dmf[j,1], gama_err[j])
+          c(gama_dmf[j,1], gama_err[j], 2L)
         }
       }
     }else{
-      c(devilsd10_dmf[j,1], devilsd10_err[j])
+      c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
     }
   }
   combine_dmf[sm_mids < devilsd10_xlim, ] = 0
@@ -1454,7 +3001,7 @@ combine_hybrid_gmf_corr = foreach(i = 1:length(zmids)) %do% {
   df_cosmic$ERR = 0.5 * (df_cosmic$Q84 - df_cosmic$Q16)
   
   combine_dmf = data.frame(combine_dmf)
-  names(combine_dmf) = c("phi", "err")
+  names(combine_dmf) = c("phi", "err", "WHICH")
   combine_dmf$x = sm_mids
   
   ret_ = list(
@@ -1524,6 +3071,7 @@ combine_hybrid_gmf_corr = foreach(i = 1:length(zmids)) %do% {
   dev.off()
   return(ret_)
 }
+
 ## SMF
 thorne21_evol = function(lbt){
   list(
@@ -1532,12 +3080,12 @@ thorne21_evol = function(lbt){
     logphi2 = 0.0843*lbt - 2.6863
   )
 }
-combine_hybrid_smf = foreach(i = 1:length(zmids)) %do% {
+combine_noAGN_smf = foreach(i = 1:length(zmids)) %do% {
   message("Stellar mass reduced integration range, Mstar=[8,12] and Thorne+21 priors")
-  gama_dmf = gama_hybrid_smf[[i]]
+  gama_dmf = gama_noAGN_smf[[i]]
   gama_err = gama_dmf[,2]
   
-  devilsd10_dmf = devilsd10_hybrid_smf[[i]]
+  devilsd10_dmf = devilsd10_noAGN_smf[[i]]
   devilsd10_err = devilsd10_dmf[,2]
   
   gama_xlim = sm_mids[which.max(gama_dmf[,1])]
@@ -1552,16 +3100,16 @@ combine_hybrid_smf = foreach(i = 1:length(zmids)) %do% {
   combine_dmf = foreach(j = 1:length(sm_mids), .combine = rbind) %do% {
     if( gama_err[j] <= ifelse(devilsd10_err[j]==0, 999, devilsd10_err[j]) ){ ## check if GAMA or DEVILS has better S/N
       if( !gama_idx[j] ){ ## If below GAMA completeness, use devils 
-        c(devilsd10_dmf[j,1], devilsd10_err[j])
+        c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
       }else{ 
         if( (devilsd10_dmf[j,1] - gama_dmf[j,1])/(gama_err[j] + 1e-323) > 5 ){ 
-          c(devilsd10_dmf[j,1], devilsd10_err[j]) ## If above GAMA completeness and devils is more than 5sigma above then use devils
+          c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## If above GAMA completeness and devils is more than 5sigma above then use devils
         }else{
-          c(gama_dmf[j,1], gama_err[j])
+          c(gama_dmf[j,1], gama_err[j], 2L)
         }
       }
     }else{
-      c(devilsd10_dmf[j,1], devilsd10_err[j])
+      c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
     }
   }
   combine_dmf[sm_mids < devilsd10_xlim, ] = 0
@@ -1631,7 +3179,385 @@ combine_hybrid_smf = foreach(i = 1:length(zmids)) %do% {
   df_cosmic$ERR = 0.5 * (df_cosmic$Q84 - df_cosmic$Q16)
   
   combine_dmf = data.frame(combine_dmf)
-  names(combine_dmf) = c("phi", "err")
+  names(combine_dmf) = c("phi", "err", "WHICH")
+  combine_dmf$x = sm_mids
+  
+  ret_ = list(
+    "dmf" = combine_dmf,
+    "fit" = df_fit, 
+    "cosmic" = df_cosmic,
+    "highout" = highout
+  )
+  
+  png(paste0("~/Documents/DustMassDensity/plots/smf_noAGN/lbt_", round(lbt_mids[i],3), ".png"))
+  par(mfcol = c(1,2), oma = rep(1.5,4), mar = rep(1.5,4))
+  magplot(
+    NA,
+    log = "y",
+    xlim = c(3.5, 13.5),
+    ylim = c(1e-8, 10),
+    xlab = "Mstar",
+    ylab = "Phi",
+    pch = 1,
+    col = "red"
+  )
+  lines(
+    mdustvec, q50_fit, col = "red"
+  )
+  lines(
+    mdustvec, q16_fit, col = "red", lty = 2
+  )
+  lines(
+    mdustvec, q84_fit, col = "red", lty = 2
+  )
+  points(
+    sm_mids,
+    combine_dmf[,1],
+    pch = 16,
+    cex = 2,
+    col = alpha("red", 0.6)
+  )
+  magerr(
+    sm_mids,
+    combine_dmf[,1],
+    ylo = combine_dmf[,2],
+    col = "red"
+  )
+  points(
+    sm_mids,
+    gama_dmf[,1],
+    pch = "x",
+    col = "purple"
+  )
+  magerr(
+    sm_mids,
+    gama_dmf[,1],
+    ylo = gama_err,
+    col = "purple"
+  )
+  points(
+    sm_mids,
+    devilsd10_dmf[,1],
+    pch = "x",
+    col = "cornflowerblue"
+  )
+  magerr(
+    sm_mids,
+    devilsd10_dmf[,1],
+    ylo = devilsd10_err,
+    col = "cornflowerblue"
+  )
+  magplot(
+    NA,
+    log = "y",
+    xlim = c(3.5, 13.5),
+    ylim = c(10**3.5, 10**9.5),
+    xlab = "Mstar",
+    ylab = "Phi",
+    pch = 1,
+    col = "red"
+  )
+  lines(
+    mdustvec, q50_fit * 10^mdustvec, col = "red"
+  )
+  lines(
+    mdustvec, q16_fit * 10^mdustvec, col = "red", lty = 2
+  )
+  lines(
+    mdustvec, q84_fit * 10^mdustvec, col = "red", lty = 2
+  )
+  dev.off()
+  return(ret_)
+}
+combine_AGN_smf = foreach(i = 1:length(zmids)) %do% {
+  message("Stellar mass reduced integration range, Mstar=[8,12] and Thorne+21 priors")
+  gama_dmf = gama_AGN_smf[[i]]
+  gama_err = gama_dmf[,2]
+  
+  devilsd10_dmf = devilsd10_AGN_smf[[i]]
+  devilsd10_err = devilsd10_dmf[,2]
+  
+  gama_xlim = sm_mids[which.max(gama_dmf[,1])]
+  devilsd10_xlim = sm_mids[which.max(devilsd10_dmf[,1])]
+  gama_SN = gama_dmf[,1]/gama_err
+  devilsd10_SN = devilsd10_dmf[,1]/devilsd10_err
+  
+  gama_idx = sm_mids >= gama_xlim
+  devilsd10_idx = sm_mids >= devilsd10_xlim
+  gama_dmf[gama_idx, ]
+  
+  combine_dmf = foreach(j = 1:length(sm_mids), .combine = rbind) %do% {
+    if( gama_err[j] <= ifelse(devilsd10_err[j]==0, 999, devilsd10_err[j]) ){ ## check if GAMA or DEVILS has better S/N
+      if( !gama_idx[j] ){ ## If below GAMA completeness, use devils 
+        c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+      }else{ 
+        if( (devilsd10_dmf[j,1] - gama_dmf[j,1])/(gama_err[j] + 1e-323) > 5 ){ 
+          c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## If above GAMA completeness and devils is more than 5sigma above then use devils
+        }else{
+          c(gama_dmf[j,1], gama_err[j], 2L)
+        }
+      }
+    }else{
+      c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+    }
+  }
+  combine_dmf[sm_mids < devilsd10_xlim, ] = 0
+  
+  thorne21 = thorne21_evol(lbt = lbt_mids[i])
+  
+  pinit = c(10, 0.0, 0.0, -4, -4)
+  highout = Highlander(
+    parm = pinit, 
+    lower = c(5, -2.0, -1.1, -8, -8),
+    upper = c(15, -0.8, 1.5, 1, 1),
+    Data = list(
+      xx = sm_mids[combine_dmf[,1] > 0], 
+      yy = combine_dmf[,1][combine_dmf[,1] > 0], 
+      yyerr = combine_dmf[,2][combine_dmf[,1] > 0], 
+      func = double_schechter, 
+      prior = function(p){
+        sum(
+          dnorm(p[1], x = thorne21$Mstar, sd = 0.5, log = TRUE),
+          dnorm(p[2], x = -1.5, sd = 0.1, log = TRUE),
+          dnorm(p[3], x = -0.5, sd = 0.1, log = TRUE),
+          dnorm(p[4], x = thorne21$logphi1, sd = 0.5, log = TRUE),
+          dnorm(p[5], x = thorne21$logphi2, sd = 0.5, log = TRUE),
+          0
+        )
+      }
+    ), 
+    likefunc = LL, 
+    liketype = "max", 
+    Niters = c(Nsamples, Nsamples), 
+    NfinalMCMC = Nsamples, 
+    parm.names = c("Mstar", "alpha1", "alpha2", "phi1", "phi2")
+  )
+  
+  fit_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = "rbind") %do% {
+    double_schechter(mdustvec, p = highout$LD_last$Posterior1[k, ])
+  }
+  q16_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.16
+  )
+  q50_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.50
+  )
+  q84_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.84
+  )
+  
+  df_fit = data.frame(
+    "x" = 10^mdustvec,
+    "Q50" = q50_fit,
+    "Q16" = q16_fit,
+    "Q84" = q84_fit
+  )
+  df_fit$ERR = 0.5*(df_fit$Q84 - df_fit$Q16)
+  
+  df_cosmic_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = c) %do% {
+    trapz(
+      x = mdustvec[mdustvec >= 8 & mdustvec <= 12],
+      y = 10^mdustvec[mdustvec >= 8 & mdustvec <= 12] * fit_samples[k,mdustvec >= 8 & mdustvec <= 12]
+    )
+  }
+  df_cosmic = data.frame(
+    "Q50" = quantile(df_cosmic_samples, probs = 0.5),
+    "Q16" = quantile(df_cosmic_samples, probs = 0.16),
+    "Q84" = quantile(df_cosmic_samples, probs = 0.84)
+  )
+  df_cosmic$ERR = 0.5 * (df_cosmic$Q84 - df_cosmic$Q16)
+  
+  combine_dmf = data.frame(combine_dmf)
+  names(combine_dmf) = c("phi", "err", "WHICH")
+  combine_dmf$x = sm_mids
+  
+  ret_ = list(
+    "dmf" = combine_dmf,
+    "fit" = df_fit, 
+    "cosmic" = df_cosmic,
+    "highout" = highout
+  )
+  
+  png(paste0("~/Documents/DustMassDensity/plots/smf_AGN/lbt_", round(lbt_mids[i],3), ".png"))
+  par(mfcol = c(1,2), oma = rep(1.5,4), mar = rep(1.5,4))
+  magplot(
+    NA,
+    log = "y",
+    xlim = c(3.5, 13.5),
+    ylim = c(1e-8, 10),
+    xlab = "Mstar",
+    ylab = "Phi",
+    pch = 1,
+    col = "red"
+  )
+  lines(
+    mdustvec, q50_fit, col = "red"
+  )
+  lines(
+    mdustvec, q16_fit, col = "red", lty = 2
+  )
+  lines(
+    mdustvec, q84_fit, col = "red", lty = 2
+  )
+  points(
+    sm_mids,
+    combine_dmf[,1],
+    pch = 16,
+    cex = 2,
+    col = alpha("red", 0.6)
+  )
+  magerr(
+    sm_mids,
+    combine_dmf[,1],
+    ylo = combine_dmf[,2],
+    col = "red"
+  )
+  points(
+    sm_mids,
+    gama_dmf[,1],
+    pch = "x",
+    col = "purple"
+  )
+  magerr(
+    sm_mids,
+    gama_dmf[,1],
+    ylo = gama_err,
+    col = "purple"
+  )
+  points(
+    sm_mids,
+    devilsd10_dmf[,1],
+    pch = "x",
+    col = "cornflowerblue"
+  )
+  magerr(
+    sm_mids,
+    devilsd10_dmf[,1],
+    ylo = devilsd10_err,
+    col = "cornflowerblue"
+  )
+  magplot(
+    NA,
+    log = "y",
+    xlim = c(3.5, 13.5),
+    ylim = c(10**3.5, 10**9.5),
+    xlab = "Mstar",
+    ylab = "Phi",
+    pch = 1,
+    col = "red"
+  )
+  lines(
+    mdustvec, q50_fit * 10^mdustvec, col = "red"
+  )
+  lines(
+    mdustvec, q16_fit * 10^mdustvec, col = "red", lty = 2
+  )
+  lines(
+    mdustvec, q84_fit * 10^mdustvec, col = "red", lty = 2
+  )
+  dev.off()
+  return(ret_)
+}
+combine_hybrid_smf = foreach(i = 1:length(zmids)) %do% {
+  message("Stellar mass reduced integration range, Mstar=[8,12] and Thorne+21 priors")
+  gama_dmf = gama_hybrid_smf[[i]]
+  gama_err = gama_dmf[,2]
+  
+  devilsd10_dmf = devilsd10_hybrid_smf[[i]]
+  devilsd10_err = devilsd10_dmf[,2]
+  
+  gama_xlim = sm_mids[which.max(gama_dmf[,1])]
+  devilsd10_xlim = sm_mids[which.max(devilsd10_dmf[,1])]
+  gama_SN = gama_dmf[,1]/gama_err
+  devilsd10_SN = devilsd10_dmf[,1]/devilsd10_err
+  
+  gama_idx = sm_mids >= gama_xlim
+  devilsd10_idx = sm_mids >= devilsd10_xlim
+  gama_dmf[gama_idx, ]
+  
+  combine_dmf = foreach(j = 1:length(sm_mids), .combine = rbind) %do% {
+    if( gama_err[j] <= ifelse(devilsd10_err[j]==0, 999, devilsd10_err[j]) ){ ## check if GAMA or DEVILS has better S/N
+      if( !gama_idx[j] ){ ## If below GAMA completeness, use devils 
+        c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+      }else{ 
+        if( (devilsd10_dmf[j,1] - gama_dmf[j,1])/(gama_err[j] + 1e-323) > 5 ){ 
+          c(devilsd10_dmf[j,1], devilsd10_err[j], 1L) ## If above GAMA completeness and devils is more than 5sigma above then use devils
+        }else{
+          c(gama_dmf[j,1], gama_err[j], 2L)
+        }
+      }
+    }else{
+      c(devilsd10_dmf[j,1], devilsd10_err[j], 1L)
+    }
+  }
+  combine_dmf[sm_mids < devilsd10_xlim, ] = 0
+  
+  thorne21 = thorne21_evol(lbt = lbt_mids[i])
+  
+  pinit = c(10, 0.0, 0.0, -4, -4)
+  highout = Highlander(
+    parm = pinit, 
+    lower = c(5, -2.0, -1.1, -8, -8),
+    upper = c(15, -0.8, 1.5, 1, 1),
+    Data = list(
+      xx = sm_mids[combine_dmf[,1] > 0], 
+      yy = combine_dmf[,1][combine_dmf[,1] > 0], 
+      yyerr = combine_dmf[,2][combine_dmf[,1] > 0], 
+      func = double_schechter, 
+      prior = function(p){
+        sum(
+          dnorm(p[1], x = thorne21$Mstar, sd = 0.5, log = TRUE),
+          dnorm(p[2], x = -1.5, sd = 0.1, log = TRUE),
+          dnorm(p[3], x = -0.5, sd = 0.1, log = TRUE),
+          dnorm(p[4], x = thorne21$logphi1, sd = 0.5, log = TRUE),
+          dnorm(p[5], x = thorne21$logphi2, sd = 0.5, log = TRUE),
+          0
+        )
+      }
+    ), 
+    likefunc = LL, 
+    liketype = "max", 
+    Niters = c(Nsamples, Nsamples), 
+    NfinalMCMC = Nsamples, 
+    parm.names = c("Mstar", "alpha1", "alpha2", "phi1", "phi2")
+  )
+  
+  fit_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = "rbind") %do% {
+    double_schechter(mdustvec, p = highout$LD_last$Posterior1[k, ])
+  }
+  q16_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.16
+  )
+  q50_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.50
+  )
+  q84_fit = colQuantiles(
+    as.matrix(fit_samples), probs = 0.84
+  )
+  
+  df_fit = data.frame(
+    "x" = 10^mdustvec,
+    "Q50" = q50_fit,
+    "Q16" = q16_fit,
+    "Q84" = q84_fit
+  )
+  df_fit$ERR = 0.5*(df_fit$Q84 - df_fit$Q16)
+  
+  df_cosmic_samples = foreach(k = 1:dim(highout$LD_last$Posterior1)[1], .combine = c) %do% {
+    trapz(
+      x = mdustvec[mdustvec >= 8 & mdustvec <= 12],
+      y = 10^mdustvec[mdustvec >= 8 & mdustvec <= 12] * fit_samples[k,mdustvec >= 8 & mdustvec <= 12]
+    )
+  }
+  df_cosmic = data.frame(
+    "Q50" = quantile(df_cosmic_samples, probs = 0.5),
+    "Q16" = quantile(df_cosmic_samples, probs = 0.16),
+    "Q84" = quantile(df_cosmic_samples, probs = 0.84)
+  )
+  df_cosmic$ERR = 0.5 * (df_cosmic$Q84 - df_cosmic$Q16)
+  
+  combine_dmf = data.frame(combine_dmf)
+  names(combine_dmf) = c("phi", "err", "WHICH")
   combine_dmf$x = sm_mids
   
   ret_ = list(
@@ -1721,6 +3647,7 @@ combine_hybrid_smf = foreach(i = 1:length(zmids)) %do% {
   dev.off()
   return(ret_)
 }
+
 ## Only FIR DEVILS sources 
 devilsd10_hybrid_cdmh_FIR = (foreach(i = 1:length(zmids)) %do% {
   message(i)
@@ -1736,7 +3663,7 @@ devilsd10_hybrid_cdmh_FIR = (foreach(i = 1:length(zmids)) %do% {
   # bin_dmf = hh$counts/(vol * diff(sm_bins))
   # pois_dmf = sqrt(hh$counts)/(vol * diff(sm_bins))
   # 
-  # err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + mc_err^2 )
+  # err_dmf = sqrt( pois_dmf^2 + (err_floor*bin_dmf)^2 + do_MC_err*mc_err^2 )
   # df = data.frame(cbind(bin_dmf, err_dmf))
   # names(df) = c("phi", "err")
   # df$x = hh$mids
@@ -1754,15 +3681,58 @@ cdmh_AGN = data.frame(foreach(i = 1:length(combine_AGN_dmf), .combine = bind_row
 cdmh_hybrid = data.frame(foreach(i = 1:length(combine_hybrid_dmf), .combine = bind_rows) %do% {
   combine_hybrid_dmf[[i]]$cosmic
 })
+
+cdmh_noAGN_corr = data.frame(foreach(i = 1:length(combine_noAGN_dmf_corr), .combine = bind_rows) %do% {
+  combine_noAGN_dmf_corr[[i]]$cosmic
+})
+cdmh_AGN_corr = data.frame(foreach(i = 1:length(combine_AGN_dmf_corr), .combine = bind_rows) %do% {
+  combine_AGN_dmf_corr[[i]]$cosmic
+})
 cdmh_hybrid_corr = data.frame(foreach(i = 1:length(combine_hybrid_dmf_corr), .combine = bind_rows) %do% {
   combine_hybrid_dmf_corr[[i]]$cosmic
+})
+cdmh_hybrid_corr_Zsol = data.frame(foreach(i = 1:length(combine_hybrid_dmf_corr), .combine = bind_rows) %do% {
+  combine_hybrid_dmf_corr_Zsol[[i]]$cosmic
+})
+
+## Check the difference in the slopes 
+message("From z = ", zmids[1], "to z = ", zmids[11])
+message( "Corr ", log10(cdmh_hybrid_corr$Q50[11])-log10(cdmh_hybrid_corr$Q50[1]) )
+message( "Solar RR14 ", log10(cdmh_hybrid_corr_Zsol$Q50[11])-log10(cdmh_hybrid_corr_Zsol$Q50[1]) )
+message( "Solar ", log10(cdmh_hybrid$Q50[11])-log10(cdmh_hybrid$Q50[1]) )
+
+message("From z = ", zmids[11], "to z = ", zmids[15])
+message( "Corr ", log10(cdmh_hybrid_corr$Q50[11])-log10(cdmh_hybrid_corr$Q50[15]) )
+message( "Solar RR14 ", log10(cdmh_hybrid_corr_Zsol$Q50[11])-log10(cdmh_hybrid_corr_Zsol$Q50[15]) )
+message( "Solar ", log10(cdmh_hybrid$Q50[11])-log10(cdmh_hybrid$Q50[15]) )
+
+cgmh_noAGN_corr = data.frame(foreach(i = 1:length(combine_noAGN_gmf_corr), .combine = bind_rows) %do% {
+  combine_noAGN_gmf_corr[[i]]$cosmic
+})
+cgmh_AGN_corr = data.frame(foreach(i = 1:length(combine_AGN_gmf_corr), .combine = bind_rows) %do% {
+  combine_AGN_gmf_corr[[i]]$cosmic
 })
 cgmh_hybrid_corr = data.frame(foreach(i = 1:length(combine_hybrid_gmf_corr), .combine = bind_rows) %do% {
   combine_hybrid_gmf_corr[[i]]$cosmic
 })
+
+csmh_noAGN = data.frame(foreach(i = 1:length(combine_noAGN_smf), .combine = bind_rows) %do% {
+  combine_noAGN_smf[[i]]$cosmic
+})
+csmh_AGN = data.frame(foreach(i = 1:length(combine_AGN_smf), .combine = bind_rows) %do% {
+  combine_AGN_smf[[i]]$cosmic
+})
 csmh_hybrid = data.frame(foreach(i = 1:length(combine_hybrid_smf), .combine = bind_rows) %do% {
   combine_hybrid_smf[[i]]$cosmic
 })
+
+# driver18 = fread("~/Documents/DustMassDensity/data/literature_evo/cdmh/driver18.csv")
+# magplot(
+#   driver18$lbt, driver18$cdmh, log = "y", ylim = c(1e4, 1e7)
+# )
+# lines(
+#   lbt_mids, cdmh_hybrid_corr$Q50
+# )
 
 names_par = c("M", "alpha", "beta", "phi1", "phi2")
 names_par_err = paste0(names_par, "Err")
@@ -2152,9 +4122,43 @@ LSS_corrErr = abs(LSS_corr) * sqrt((csmh_regressed$ERR/csmh_regressed$Q50)^2 + (
 # LSS_corr[lbt_mids >= 7] = 1.0
 # LSS_corrErr[lbt_mids >= 7] = 0.0
 
+## Also show integrated M&D14 curve 
+zvec = seq(0, 14, 0.01)
+Hz = approxfun(
+  zvec, 
+  cosgrowH(z = zvec, ref = "Planck18")
+)
+psi = 0.015 * ((1+zvec)^2.7 / (1 + ((1+zvec)/2.9)^5.6))
+make_mass = rev(
+  cumtrapz(
+    max(zvec) - rev(zvec), 
+    rev(psi * ((Hz(zvec)*(1/3.09e19) / (1/3.15e7))*(1+zvec))^-1)
+  ) 
+) 
+returnFrac = 0.41
+ret = (1-returnFrac) * make_mass
+md14_csmh = approxfun(
+  zvec, 
+  ret, 
+  rule = 2
+) 
+norm_csmh_md14 = optimise(
+  f = function(p){
+    -1*sum(dnorm(
+      x = log10(csmh_hybrid$Q50),
+      mean = p[1] + log10(md14_csmh(zmids)),
+      sd = csmh_hybrid$ERR/(log(10) * csmh_hybrid$Q50),
+      log = TRUE
+    ))
+  },
+  interval = c(-2,1)
+)
+LSS_md14 = md14_csmh(zmids) / csmh_hybrid$Q50 * 10^norm_csmh_md14$minimum
+
 LSS = data.frame(
   "LSS" = LSS_corr,
-  "ERR" = LSS_corrErr
+  "ERR" = LSS_corrErr,
+  "LSS_md14" = LSS_md14
 )
 
 # Md_corr = as.numeric(h5read(h5file, "Md_corr"))
@@ -2162,7 +4166,23 @@ cdmh_hybrid_corr$CORR = LSS_corr * cdmh_hybrid_corr$Q50
 cdmh_hybrid_corr$CORR_ERR = (LSS_corr * cdmh_hybrid_corr$Q50) * sqrt( (cdmh_hybrid_corr$ERR/cdmh_hybrid_corr$Q50)^2 + (LSS_corrErr/LSS_corr)^2 )
 cdmh_hybrid_corr$CORRQ16 = cdmh_hybrid_corr$CORR - cdmh_hybrid_corr$CORR_ERR
 cdmh_hybrid_corr$CORRQ84 = cdmh_hybrid_corr$CORR + cdmh_hybrid_corr$CORR_ERR
+cdmh_noAGN_corr$CORR = LSS_corr * cdmh_noAGN_corr$Q50
+cdmh_noAGN_corr$CORR_ERR = (LSS_corr * cdmh_noAGN_corr$Q50) * sqrt( (cdmh_noAGN_corr$ERR/cdmh_noAGN_corr$Q50)^2 + (LSS_corrErr/LSS_corr)^2 )
+cdmh_noAGN_corr$CORRQ16 = cdmh_noAGN_corr$CORR - cdmh_noAGN_corr$CORR_ERR
+cdmh_noAGN_corr$CORRQ84 = cdmh_noAGN_corr$CORR + cdmh_noAGN_corr$CORR_ERR
+cdmh_AGN_corr$CORR = LSS_corr * cdmh_AGN_corr$Q50
+cdmh_AGN_corr$CORR_ERR = (LSS_corr * cdmh_AGN_corr$Q50) * sqrt( (cdmh_AGN_corr$ERR/cdmh_AGN_corr$Q50)^2 + (LSS_corrErr/LSS_corr)^2 )
+cdmh_AGN_corr$CORRQ16 = cdmh_AGN_corr$CORR - cdmh_AGN_corr$CORR_ERR
+cdmh_AGN_corr$CORRQ84 = cdmh_AGN_corr$CORR + cdmh_AGN_corr$CORR_ERR
 
+cgmh_noAGN_corr$CORR = LSS_corr * cgmh_noAGN_corr$Q50
+cgmh_noAGN_corr$CORR_ERR = (LSS_corr * cgmh_noAGN_corr$Q50) * sqrt( (cgmh_noAGN_corr$ERR/cgmh_noAGN_corr$Q50)^2 + (LSS_corrErr/LSS_corr)^2 )
+cgmh_noAGN_corr$CORRQ16 = cgmh_noAGN_corr$CORR - cgmh_noAGN_corr$CORR_ERR
+cgmh_noAGN_corr$CORRQ84 = cgmh_noAGN_corr$CORR + cgmh_noAGN_corr$CORR_ERR
+cgmh_AGN_corr$CORR = LSS_corr * cgmh_AGN_corr$Q50
+cgmh_AGN_corr$CORR_ERR = (LSS_corr * cgmh_AGN_corr$Q50) * sqrt( (cgmh_AGN_corr$ERR/cgmh_AGN_corr$Q50)^2 + (LSS_corrErr/LSS_corr)^2 )
+cgmh_AGN_corr$CORRQ16 = cgmh_AGN_corr$CORR - cgmh_AGN_corr$CORR_ERR
+cgmh_AGN_corr$CORRQ84 = cgmh_AGN_corr$CORR + cgmh_AGN_corr$CORR_ERR
 cgmh_hybrid_corr$CORR = LSS_corr * cgmh_hybrid_corr$Q50
 cgmh_hybrid_corr$CORR_ERR = (LSS_corr * cgmh_hybrid_corr$Q50) * sqrt( (cgmh_hybrid_corr$ERR/cgmh_hybrid_corr$Q50)^2 + (LSS_corrErr/LSS_corr)^2 )
 cgmh_hybrid_corr$CORRQ16 = cgmh_hybrid_corr$CORR - cgmh_hybrid_corr$CORR_ERR
@@ -2171,12 +4191,75 @@ cgmh_hybrid_corr$CORRQ84 = cgmh_hybrid_corr$CORR + cgmh_hybrid_corr$CORR_ERR
 csmh_hybrid$CORR = csmh_hybrid$Q50 * LSS_corr
 csmh_hybrid$CORR_ERR = (LSS_corr * csmh_hybrid$Q50) * sqrt( (csmh_hybrid$ERR/csmh_hybrid$Q50)^2 + (LSS_corrErr/LSS_corr)^2 )
 csmh_hybrid$CORRQ16 = csmh_hybrid$CORR - csmh_hybrid$CORR_ERR
-csmh_hybrid$CORRQ84 = csmh_hybrid$CORR + csmh_hybrid$CORR_ER
+csmh_hybrid$CORRQ84 = csmh_hybrid$CORR + csmh_hybrid$CORR_ERR
 
 csmh_regressed$Q50_scaled = csmh_regressed$Q50 * 10^norm_csmh$minimum
 csmh_regressed$Q16_scaled = csmh_regressed$Q16 * 10^norm_csmh$minimum
 csmh_regressed$Q84_scaled = csmh_regressed$Q84 * 10^norm_csmh$minimum
 csmh_regressed$ERR_scaled = csmh_regressed$ERR * 10^norm_csmh$minimum
+
+# Compute difference on the cdmh between AGN and noAGN, in dex IDGAF
+csmh_noAGN_AGN_difference = foreach(i = 1:dim(cdmh_AGN_corr)[1], .combine = bind_rows) %do% {
+  noAGN_samples = rnorm(n = 1000, mean = csmh_noAGN$Q50[i], sd = csmh_noAGN$ERR[i])
+  AGN_samples = rnorm(n = 1000, mean = csmh_AGN$Q50[i], sd = csmh_AGN$ERR[i])
+  
+  difference = log10(noAGN_samples/AGN_samples)
+  list(
+    "Q50" = median(difference, na.rm = TRUE), 
+    "Q16" = quantile(difference, prob = 0.16, na.rm = TRUE),
+    "Q84" = quantile(difference, prob = 0.84, na.rm = TRUE),
+    "ERR" = 0.5 * (quantile(difference, prob = 0.84, na.rm = TRUE) - quantile(difference, prob = 0.16, na.rm = TRUE))
+  )
+}
+cdmh_noAGN_AGN_difference = foreach(i = 1:dim(cdmh_AGN_corr)[1], .combine = bind_rows) %do% {
+  noAGN_samples = rnorm(n = 1000, mean = cdmh_noAGN_corr$CORR[i], sd = cdmh_noAGN_corr$CORR_ERR[i])
+  AGN_samples = rnorm(n = 1000, mean = cdmh_AGN_corr$CORR[i], sd = cdmh_AGN_corr$CORR_ERR[i])
+  
+  difference = log10(noAGN_samples/AGN_samples)
+  list(
+    "Q50" = median(difference, na.rm = TRUE), 
+    "Q16" = quantile(difference, prob = 0.16, na.rm = TRUE),
+    "Q84" = quantile(difference, prob = 0.84, na.rm = TRUE),
+    "ERR" = 0.5 * (quantile(difference, prob = 0.84, na.rm = TRUE) - quantile(difference, prob = 0.16, na.rm = TRUE))
+  )
+}
+cgmh_noAGN_AGN_difference = foreach(i = 1:dim(cdmh_AGN_corr)[1], .combine = bind_rows) %do% {
+  noAGN_samples = rnorm(n = 1000, mean = cgmh_noAGN_corr$CORR[i], sd = cgmh_noAGN_corr$CORR_ERR[i])
+  AGN_samples = rnorm(n = 1000, mean = cgmh_AGN_corr$CORR[i], sd = cgmh_AGN_corr$CORR_ERR[i])
+  
+  difference = log10(noAGN_samples/AGN_samples)
+  list(
+    "Q50" = median(difference, na.rm = TRUE), 
+    "Q16" = quantile(difference, prob = 0.16, na.rm = TRUE),
+    "Q84" = quantile(difference, prob = 0.84, na.rm = TRUE),
+    "ERR" = 0.5 * (quantile(difference, prob = 0.84, na.rm = TRUE) - quantile(difference, prob = 0.16, na.rm = TRUE))
+  )
+}
+# magplot(
+#   lbt_mids,
+#   cdmh_noAGN_AGN_difference$Q50, 
+#   ylim = c(-0.1, 0.5)
+# )
+# magerr(
+#   lbt_mids,
+#   cdmh_noAGN_AGN_difference$Q50, 
+#   ylo = cdmh_noAGN_AGN_difference$ERR
+# )
+# points(
+#   lbt_mids,
+#   cgmh_noAGN_AGN_difference$Q50, 
+#   col = "red"
+# )
+# magerr(
+#   lbt_mids,
+#   cgmh_noAGN_AGN_difference$Q50, 
+#   ylo = cgmh_noAGN_AGN_difference$ERR, 
+#   col = "red"
+# )
+# 
+# maghist(
+#   log10(devilsd10_AGN$dustlum.total/devilsd10_noAGN$dustlum.total)
+# )
 
 h5ls(h5file)
 h5createFile(h5file)
@@ -2199,10 +4282,19 @@ h5write(obj = cdmh_noAGN, file = h5file, name = "cosmic/MdustnoAGN")
 h5write(obj = cdmh_AGN, file = h5file, name = "cosmic/MdustAGN")
 h5write(obj = cdmh_hybrid, file = h5file, name = "cosmic/MdustHybrid")
 h5write(obj = devilsd10_hybrid_cdmh_FIR, file = h5file, name = "cosmic/MdustDEVILSFIR")
+h5write(obj = cdmh_noAGN_corr, file = h5file, name = "cosmic/MdustnoAGNCorr")
+h5write(obj = cdmh_AGN_corr, file = h5file, name = "cosmic/MdustAGNCorr")
+# h5delete(h5file, "cosmic/MdustHybridCorr")
 h5write(obj = cdmh_hybrid_corr, file = h5file, name = "cosmic/MdustHybridCorr")
+h5write(obj = cgmh_noAGN_corr, file = h5file, name = "cosmic/MgasnoAGNCorr")
+h5write(obj = cgmh_AGN_corr, file = h5file, name = "cosmic/MgasAGNCorr")
 h5write(obj = cgmh_hybrid_corr, file = h5file, name = "cosmic/MgasHybridCorr")
 h5write(obj = csmh_hybrid, file = h5file, name = "cosmic/MstarHybrid")
 h5write(obj = csmh_regressed, file = h5file, name = "cosmic/MstarRegressed")
+
+h5write(obj = csmh_noAGN_AGN_difference, file = h5file, name = "cosmic/csmhAGNnoAGNDiff")
+h5write(obj = cdmh_noAGN_AGN_difference, file = h5file, name = "cosmic/cdmhAGNnoAGNDiff")
+h5write(obj = cgmh_noAGN_AGN_difference, file = h5file, name = "cosmic/cgmhAGNnoAGNDiff")
 
 h5delete(h5file, "binDF")
 h5createGroup(h5file, "binDF")
@@ -2392,3 +4484,10 @@ h5write(
 )
 
 save.image("~/Documents/DustMassDensity/data/dmf.Rdata")
+
+magplot(
+  lbt_mids, log10(cdmh_hybrid$Q50/2.5), ylim = c(5, 6)
+)
+lines(
+  lbt_mids, log10(cdmh_hybrid_corr$Q50)
+)

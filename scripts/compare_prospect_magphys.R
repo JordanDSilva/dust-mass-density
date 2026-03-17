@@ -563,7 +563,7 @@ profound_Data = list(
 )
 saveRDS(profound_Data, "~/Documents/DustMassDensity/Pawsey/save_highSN_sample.rds")
 
-prospect_fnames = list.files("/Users/22252335/Documents/DustMassDensity/Pawsey/out/", full.names = TRUE)
+prospect_fnames = list.files("~/Documents/DustMassDensity/Pawsey/out/", full.names = TRUE)
 prospect_files = lapply(prospect_fnames, function(x){
   foo = readRDS(x)
   # plot(foo$bestfit$SEDout)
@@ -606,7 +606,7 @@ magerr(
 )
 abline(0,1)
 
-# RR14_BPL = readRDS("~/Documents/DustMassDensity/data/RR14_BPL.rds")
+RR14_BPL = readRDS("~/Documents/DustMassDensity/data/RR14_BPL.rds")
 new_dust_masses_solar = lapply(prospect_refit_match$stub, function(x){
   message(x)
   foo = readRDS(x)
@@ -620,48 +620,126 @@ new_dust_masses_solar = lapply(prospect_refit_match$stub, function(x){
   lum_screen = foo$parm_sample$DustLumScreen
   lum_birth = foo$parm_sample$DustLumBirth
   
-  # Zfinal = 10^foo$highlander$LD_last$Posterior1[, "Zfinal"]
+  Zfinal = 10^foo$highlander$LD_last$Posterior1[, "Zfinal"]
   # RR14_DTH = RR14_BPL(Z = Zfinal, doDTG = FALSE)
   
-  new_dust_mass_solar = (lum_screen/Dale_vM2L_func(alpha_screen) + lum_birth/Dale_vM2L_func(alpha_birth))
+  new_dust_mass_solar_q14 = (lum_screen/Dale_M2L_variableDTH_func(alpha_screen, qPAH_VSG = 0.14) + lum_birth/Dale_M2L_variableDTH_func(alpha_birth, qPAH_VSG = 0.14))
+  new_dust_mass_solar_q10 = (lum_screen/Dale_M2L_variableDTH_func(alpha_screen, qPAH_VSG = 0.10) + lum_birth/Dale_M2L_variableDTH_func(alpha_birth, qPAH_VSG = 0.10))
+  new_dust_mass_solar_q05 = (lum_screen/Dale_M2L_variableDTH_func(alpha_screen, qPAH_VSG = 0.05) + lum_birth/Dale_M2L_variableDTH_func(alpha_birth, qPAH_VSG = 0.05))
+  new_dust_mass_solar_q05_RR14 = new_dust_mass_solar_q05 * RR14_BPL(Zfinal, doDTG = FALSE)/0.0073
+  new_dust_mass_solar_q10_RR14 = new_dust_mass_solar_q10 * RR14_BPL(Zfinal, doDTG = FALSE)/0.0073
   
   bar = c(
-    "NewDustMassQ50" = median(new_dust_mass_solar),
-    "NewDustMassQ16" = quantile(new_dust_mass_solar, 0.16),
-    "NewDustMassQ84" = quantile(new_dust_mass_solar, 0.84),
-    "NewDustMassErr" = 0.5 * (quantile(new_dust_mass_solar, 0.84) - quantile(new_dust_mass_solar, 0.16))
+    "NewDustMassq14Q50" = median(new_dust_mass_solar_q14),
+    "NewDustMassq14Q16" = quantile(new_dust_mass_solar_q14, 0.16),
+    "NewDustMassq14Q84" = quantile(new_dust_mass_solar_q14, 0.84),
+    "NewDustMassq14Err" = 0.5 * (quantile(new_dust_mass_solar_q14, 0.84) - quantile(new_dust_mass_solar_q14, 0.16)),
+    
+    "NewDustMassq10Q50" = median(new_dust_mass_solar_q10),
+    "NewDustMassq10Q16" = quantile(new_dust_mass_solar_q10, 0.16),
+    "NewDustMassq10Q84" = quantile(new_dust_mass_solar_q10, 0.84),
+    "NewDustMassq10Err" = 0.5 * (quantile(new_dust_mass_solar_q10, 0.84) - quantile(new_dust_mass_solar_q10, 0.16)),
+    
+    "NewDustMassq05Q50" = median(new_dust_mass_solar_q05),
+    "NewDustMassq05Q16" = quantile(new_dust_mass_solar_q05, 0.16),
+    "NewDustMassq05Q84" = quantile(new_dust_mass_solar_q05, 0.84),
+    "NewDustMassq05Err" = 0.5 * (quantile(new_dust_mass_solar_q05, 0.84) - quantile(new_dust_mass_solar_q05, 0.16)),
+    
+    "NewDustMassq05RR14Q50" = median(new_dust_mass_solar_q05_RR14),
+    "NewDustMassq05RR14Q16" = quantile(new_dust_mass_solar_q05_RR14, 0.16),
+    "NewDustMassq05RR14Q84" = quantile(new_dust_mass_solar_q05_RR14, 0.84),
+    "NewDustMassq05RR14Err" = 0.5 * (quantile(new_dust_mass_solar_q05_RR14, 0.84) - quantile(new_dust_mass_solar_q05_RR14, 0.16)), 
+    
+    "NewDustMassq10RR14Q50" = median(new_dust_mass_solar_q10_RR14),
+    "NewDustMassq10RR14Q16" = quantile(new_dust_mass_solar_q10_RR14, 0.16),
+    "NewDustMassq10RR14Q84" = quantile(new_dust_mass_solar_q10_RR14, 0.84),
+    "NewDustMassq10RR14Err" = 0.5 * (quantile(new_dust_mass_solar_q10_RR14, 0.84) - quantile(new_dust_mass_solar_q10_RR14, 0.16)),
+    
+    "ZfinalQ50" = median(Zfinal),
+    "ZfinalQ16" = quantile(Zfinal, 0.16),
+    "ZfinalQ84" = quantile(Zfinal, 0.84),
+    "ZfinalErr" = 0.5 * (quantile(Zfinal, 0.84) - quantile(Zfinal, 0.16))
   )
   
   return(bar)
 })
 new_dust_masses_solar_DF = data.frame(do.call(rbind, new_dust_masses_solar))
-names(new_dust_masses_solar_DF) = c("NewDustMassQ50","NewDustMassQ16","NewDustMassQ84","NewDustMassErr")
+names(new_dust_masses_solar_DF) = c(
+  "NewDustMassq14Q50","NewDustMassq14Q16","NewDustMassq14Q84","NewDustMassq14Err",
+  "NewDustMassq10Q50","NewDustMassq10Q16","NewDustMassq10Q84","NewDustMassq10Err",
+  "NewDustMassq05Q50","NewDustMassq05Q16","NewDustMassq05Q84","NewDustMassq05Err",
+  "NewDustMassq05RR14Q50","NewDustMassq05RR14Q16","NewDustMassq05RR14Q84","NewDustMassq05RR14Err", 
+  "NewDustMassq10RR14Q50","NewDustMassq10RR14Q16","NewDustMassq10RR14Q84","NewDustMassq10RR14Err", 
+  "ZfinalQ50", "ZfinalQ16", "ZfinalQ84", "ZfinalERR"
+)
 
 print(
-  median(prospect_refit_match$DustMassQ50/new_dust_masses_solar_DF$NewDustMassQ50)
+  median(prospect_refit_match$DustMassQ50/new_dust_masses_solar_DF$NewDustMassq14Q50)
 )
 print(
-  median(profound_prospect_match$DustMass_50/new_dust_masses_solar_DF$NewDustMassQ50)
+  median(prospect_refit_match$DustMassQ50/new_dust_masses_solar_DF$NewDustMassq10Q50)
 )
 print(
-  log10(median(10^lambdar_magphys_match$mass_dust_percentile50/new_dust_masses_solar_DF$NewDustMassQ50))
+  median(prospect_refit_match$DustMassQ50/new_dust_masses_solar_DF$NewDustMassq05Q50)
+)
+print(
+  median(prospect_refit_match$DustMassQ50/new_dust_masses_solar_DF$NewDustMassq05RR14Q50)
+)
+
+print(
+  median(new_dust_masses_solar_DF$NewDustMassq05Q50/new_dust_masses_solar_DF$NewDustMassq05RR14Q50)
+)
+
+print(
+  log10(median(10^lambdar_magphys_match$mass_dust_percentile50/new_dust_masses_solar_DF$NewDustMassq10Q50))
+)
+print(
+  log10(median(10^lambdar_magphys_match$mass_dust_percentile50/new_dust_masses_solar_DF$NewDustMassq14Q50))
+)
+print(
+  log10(median(10^lambdar_magphys_match$mass_dust_percentile50/new_dust_masses_solar_DF$NewDustMassq05RR14Q50))
+)
+
+print(
+  log10(quantile(new_dust_masses_solar_DF$NewDustMassq05RR14Q50/10^lambdar_magphys_match$mass_dust_percentile50, 0.16))
+  
 )
 Md_corr = h5read('~/Documents/DustMassDensity/data/all_data.h5', "Md_corr")
 print(
   Md_corr
 )
 
+Zidx = new_dust_masses_solar_DF$ZfinalQ50 >= 0.01 & new_dust_masses_solar_DF$ZfinalQ50 <= 0.02
+print(
+  log10(median(10^lambdar_magphys_match$mass_dust_percentile50[Zidx]/new_dust_masses_solar_DF$NewDustMassq10RR14Q50[Zidx]))
+)
+
+maghist(
+  log10(10^lambdar_magphys_match$mass_dust_percentile50[Zidx]/new_dust_masses_solar_DF$NewDustMassq05RR14Q50[Zidx])
+)
+
+maghist(
+  RR14_BPL(new_dust_masses_solar_DF$ZfinalQ50[new_dust_masses_solar_DF$ZfinalQ50>0.02])/0.0073
+)
+
+## Check that the GAMA sample is super Solar
+median(
+  new_dust_masses_solar_DF$ZfinalQ50/0.014
+)
+
+RR14_BPL(median(new_dust_masses_solar_DF$ZfinalQ50))/0.0073
+
 magplot(
-  new_dust_masses_solar_DF$NewDustMassQ50,
+  new_dust_masses_solar_DF$NewDustMassq10Q50,
   profound_prospect_match$DustMass_50,
   log = "xy",
   xlim = c(1e5,1e10),
   ylim = c(1e5, 1e10)
 )
 magerr(
-  new_dust_masses_solar_DF$NewDustMassQ50,
+  new_dust_masses_solar_DF$NewDustMassq10Q50,
   profound_prospect_match$DustMass_50,
-  xlo = new_dust_masses_solar_DF$NewDustMassErr,
+  xlo = new_dust_masses_solar_DF$NewDustMassq10Err,
   ylo = (profound_prospect_match$DustMass_84-profound_prospect_match$DustMass_16)*0.5
 )
 points(
@@ -694,7 +772,7 @@ abline(0,1)
 
 magplot(
   grey_body_fits$Mdust*1.14*1.6,
-  new_dust_masses_solar_DF$NewDustMassQ50,
+  new_dust_masses_solar_DF$NewDustMassq10Q50,
   ylab = "New dust masses from ProSpect \n using the new variable DTH",
   xlab = "Grey body dust mass \n scaled up for total luminosity and total mass in dust",
   log = "xy",
@@ -705,7 +783,7 @@ abline(0,1)
 legend(
   x = "bottomright",
   legend = c(
-   paste0("Median difference (x-y) = ", round(log10(median(grey_body_fits$Mdust*1.14*1.6 / new_dust_masses_solar_DF$NewDustMassQ50)),3), " dex")
+   paste0("Median difference (x-y) = ", round(log10(median(grey_body_fits$Mdust*1.14*1.6 / new_dust_masses_solar_DF$NewDustMassq05Q50)),3), " dex")
   )
 )
 
@@ -715,6 +793,8 @@ names(grey_body_fits_df) = paste0("greybody", names(grey_body_fits_df))
 h5file = '~/Documents/DustMassDensity/data/all_data.h5'
 h5delete(h5file, "Photometry")
 h5createGroup(h5file, "Photometry")
+
+# h5delete(h5file, "Photometry/FinalSample")
 h5write(
   obj = cbind(df, new_dust_masses_solar_DF, grey_body_fits_df), file = h5file, name = "Photometry/FinalSample"
 )
