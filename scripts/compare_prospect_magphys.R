@@ -9,6 +9,7 @@ library(foreach)
 library(ProSpect)
 library(doParallel)
 library(Highlander)
+library(fields)
 
 list2env(readRDS("~/Documents/DustMassDensity/data/new_M2L_data.rds"), envir = .GlobalEnv)
 
@@ -607,6 +608,8 @@ magerr(
 abline(0,1)
 
 RR14_BPL = readRDS("~/Documents/DustMassDensity/data/RR14_BPL.rds")
+load("~/Documents/DustMassDensity/data/qPAHZ.rda")
+
 new_dust_masses_solar = lapply(prospect_refit_match$stub, function(x){
   message(x)
   foo = readRDS(x)
@@ -626,8 +629,17 @@ new_dust_masses_solar = lapply(prospect_refit_match$stub, function(x){
   new_dust_mass_solar_q14 = (lum_screen/Dale_M2L_variableDTH_func(alpha_screen, qPAH_VSG = 0.14) + lum_birth/Dale_M2L_variableDTH_func(alpha_birth, qPAH_VSG = 0.14))
   new_dust_mass_solar_q10 = (lum_screen/Dale_M2L_variableDTH_func(alpha_screen, qPAH_VSG = 0.10) + lum_birth/Dale_M2L_variableDTH_func(alpha_birth, qPAH_VSG = 0.10))
   new_dust_mass_solar_q05 = (lum_screen/Dale_M2L_variableDTH_func(alpha_screen, qPAH_VSG = 0.05) + lum_birth/Dale_M2L_variableDTH_func(alpha_birth, qPAH_VSG = 0.05))
+  new_dust_mass_solar_q035 = (lum_screen/Dale_M2L_variableDTH_func(alpha_screen, qPAH_VSG = 0.035) + lum_birth/Dale_M2L_variableDTH_func(alpha_birth, qPAH_VSG = 0.035))
+  new_dust_mass_solar_q01 = (lum_screen/Dale_M2L_variableDTH_func(alpha_screen, qPAH_VSG = 0.01) + lum_birth/Dale_M2L_variableDTH_func(alpha_birth, qPAH_VSG = 0.01))
+  
+  new_dust_mass_solar_qZ = (lum_screen/(Dale_M2L_variableDTH_func(alpha_screen, qPAH_VSG = 0.035) * qPAHZ_corr_func(Zfinal, alpha_screen)) + lum_birth/(Dale_M2L_variableDTH_func(alpha_birth, qPAH_VSG = 0.035) * qPAHZ_corr_func(Zfinal, alpha_screen)))
+  
+  new_dust_mass_solar_q01_RR14 = new_dust_mass_solar_q01 * RR14_BPL(Zfinal, doDTG = FALSE)/0.0073
+  new_dust_mass_solar_q035_RR14 = new_dust_mass_solar_q035 * RR14_BPL(Zfinal, doDTG = FALSE)/0.0073
   new_dust_mass_solar_q05_RR14 = new_dust_mass_solar_q05 * RR14_BPL(Zfinal, doDTG = FALSE)/0.0073
   new_dust_mass_solar_q10_RR14 = new_dust_mass_solar_q10 * RR14_BPL(Zfinal, doDTG = FALSE)/0.0073
+  
+  new_dust_mass_solar_qZ_RR14 = new_dust_mass_solar_qZ * RR14_BPL(Zfinal, doDTG = FALSE)/0.0073
   
   bar = c(
     "NewDustMassq14Q50" = median(new_dust_mass_solar_q14),
@@ -645,6 +657,26 @@ new_dust_masses_solar = lapply(prospect_refit_match$stub, function(x){
     "NewDustMassq05Q84" = quantile(new_dust_mass_solar_q05, 0.84),
     "NewDustMassq05Err" = 0.5 * (quantile(new_dust_mass_solar_q05, 0.84) - quantile(new_dust_mass_solar_q05, 0.16)),
     
+    "NewDustMassq035Q50" = median(new_dust_mass_solar_q035),
+    "NewDustMassq035Q16" = quantile(new_dust_mass_solar_q035, 0.16),
+    "NewDustMassq035Q84" = quantile(new_dust_mass_solar_q035, 0.84),
+    "NewDustMassq035Err" = 0.5 * (quantile(new_dust_mass_solar_q035, 0.84) - quantile(new_dust_mass_solar_q035, 0.16)),
+    
+    "NewDustMassq01Q50" = median(new_dust_mass_solar_q01),
+    "NewDustMassq01Q16" = quantile(new_dust_mass_solar_q01, 0.16),
+    "NewDustMassq01Q84" = quantile(new_dust_mass_solar_q01, 0.84),
+    "NewDustMassq01Err" = 0.5 * (quantile(new_dust_mass_solar_q01, 0.84) - quantile(new_dust_mass_solar_q01, 0.16)),
+    
+    "NewDustMassq01RR14Q50" = median(new_dust_mass_solar_q01_RR14),
+    "NewDustMassq01RR14Q16" = quantile(new_dust_mass_solar_q01_RR14, 0.16),
+    "NewDustMassq01RR14Q84" = quantile(new_dust_mass_solar_q01_RR14, 0.84),
+    "NewDustMassq01RR14Err" = 0.5 * (quantile(new_dust_mass_solar_q01_RR14, 0.84) - quantile(new_dust_mass_solar_q01_RR14, 0.16)), 
+    
+    "NewDustMassq035RR14Q50" = median(new_dust_mass_solar_q035_RR14),
+    "NewDustMassq035RR14Q16" = quantile(new_dust_mass_solar_q035_RR14, 0.16),
+    "NewDustMassq035RR14Q84" = quantile(new_dust_mass_solar_q035_RR14, 0.84),
+    "NewDustMassq035RR14Err" = 0.5 * (quantile(new_dust_mass_solar_q035_RR14, 0.84) - quantile(new_dust_mass_solar_q035_RR14, 0.16)), 
+    
     "NewDustMassq05RR14Q50" = median(new_dust_mass_solar_q05_RR14),
     "NewDustMassq05RR14Q16" = quantile(new_dust_mass_solar_q05_RR14, 0.16),
     "NewDustMassq05RR14Q84" = quantile(new_dust_mass_solar_q05_RR14, 0.84),
@@ -654,6 +686,11 @@ new_dust_masses_solar = lapply(prospect_refit_match$stub, function(x){
     "NewDustMassq10RR14Q16" = quantile(new_dust_mass_solar_q10_RR14, 0.16),
     "NewDustMassq10RR14Q84" = quantile(new_dust_mass_solar_q10_RR14, 0.84),
     "NewDustMassq10RR14Err" = 0.5 * (quantile(new_dust_mass_solar_q10_RR14, 0.84) - quantile(new_dust_mass_solar_q10_RR14, 0.16)),
+    
+    "NewDustMassqZRR14Q50" = median(new_dust_mass_solar_qZ_RR14),
+    "NewDustMassqZRR14Q16" = quantile(new_dust_mass_solar_qZ_RR14, 0.16),
+    "NewDustMassqZRR14Q84" = quantile(new_dust_mass_solar_qZ_RR14, 0.84),
+    "NewDustMassqZRR14Err" = 0.5 * (quantile(new_dust_mass_solar_qZ_RR14, 0.84) - quantile(new_dust_mass_solar_qZ_RR14, 0.16)),
     
     "ZfinalQ50" = median(Zfinal),
     "ZfinalQ16" = quantile(Zfinal, 0.16),
@@ -668,8 +705,16 @@ names(new_dust_masses_solar_DF) = c(
   "NewDustMassq14Q50","NewDustMassq14Q16","NewDustMassq14Q84","NewDustMassq14Err",
   "NewDustMassq10Q50","NewDustMassq10Q16","NewDustMassq10Q84","NewDustMassq10Err",
   "NewDustMassq05Q50","NewDustMassq05Q16","NewDustMassq05Q84","NewDustMassq05Err",
+  "NewDustMassq035Q50","NewDustMassq035Q16","NewDustMassq035Q84","NewDustMassq035Err",
+  "NewDustMassq01Q50","NewDustMassq01Q16","NewDustMassq01Q84","NewDustMassq01Err",
+  
+  "NewDustMassq01RR14Q50","NewDustMassq01RR14Q16","NewDustMassq01RR14Q84","NewDustMassq01RR14Err", 
+  "NewDustMassq035RR14Q50","NewDustMassq035RR14Q16","NewDustMassq035RR14Q84","NewDustMassq035RR14Err", 
   "NewDustMassq05RR14Q50","NewDustMassq05RR14Q16","NewDustMassq05RR14Q84","NewDustMassq05RR14Err", 
   "NewDustMassq10RR14Q50","NewDustMassq10RR14Q16","NewDustMassq10RR14Q84","NewDustMassq10RR14Err", 
+  
+  "NewDustMassqZRR14Q50","NewDustMassqZRR14Q16","NewDustMassqZRR14Q84","NewDustMassqZRR14Err", 
+  
   "ZfinalQ50", "ZfinalQ16", "ZfinalQ84", "ZfinalERR"
 )
 
@@ -683,7 +728,19 @@ print(
   median(prospect_refit_match$DustMassQ50/new_dust_masses_solar_DF$NewDustMassq05Q50)
 )
 print(
+  median(prospect_refit_match$DustMassQ50/new_dust_masses_solar_DF$NewDustMassq035Q50)
+)
+print(
+  median(prospect_refit_match$DustMassQ50/new_dust_masses_solar_DF$NewDustMassq01Q50)
+)
+print(
   median(prospect_refit_match$DustMassQ50/new_dust_masses_solar_DF$NewDustMassq05RR14Q50)
+)
+print(
+  median(prospect_refit_match$DustMassQ50/new_dust_masses_solar_DF$NewDustMassq03RR14Q50)
+)
+print(
+  median(prospect_refit_match$DustMassQ50/new_dust_masses_solar_DF$NewDustMassq01RR14Q50)
 )
 
 print(
@@ -697,12 +754,11 @@ print(
   log10(median(10^lambdar_magphys_match$mass_dust_percentile50/new_dust_masses_solar_DF$NewDustMassq14Q50))
 )
 print(
-  log10(median(10^lambdar_magphys_match$mass_dust_percentile50/new_dust_masses_solar_DF$NewDustMassq05RR14Q50))
+  1/(median(10^lambdar_magphys_match$mass_dust_percentile50/new_dust_masses_solar_DF$NewDustMassq035RR14Q50))
 )
 
 print(
-  log10(quantile(new_dust_masses_solar_DF$NewDustMassq05RR14Q50/10^lambdar_magphys_match$mass_dust_percentile50, 0.16))
-  
+  log10(quantile(new_dust_masses_solar_DF$NewDustMassq035RR14Q50/10^lambdar_magphys_match$mass_dust_percentile50, 0.16))
 )
 Md_corr = h5read('~/Documents/DustMassDensity/data/all_data.h5', "Md_corr")
 print(
@@ -711,11 +767,14 @@ print(
 
 Zidx = new_dust_masses_solar_DF$ZfinalQ50 >= 0.01 & new_dust_masses_solar_DF$ZfinalQ50 <= 0.02
 print(
-  log10(median(10^lambdar_magphys_match$mass_dust_percentile50[Zidx]/new_dust_masses_solar_DF$NewDustMassq10RR14Q50[Zidx]))
+  log10(median(10^lambdar_magphys_match$mass_dust_percentile50/new_dust_masses_solar_DF$NewDustMassq035RR14Q50))
+)
+print(
+  log10(median(10^lambdar_magphys_match$mass_dust_percentile50[Zidx]/new_dust_masses_solar_DF$NewDustMassq035RR14Q50[Zidx]))
 )
 
 maghist(
-  log10(10^lambdar_magphys_match$mass_dust_percentile50[Zidx]/new_dust_masses_solar_DF$NewDustMassq05RR14Q50[Zidx])
+  log10(10^lambdar_magphys_match$mass_dust_percentile50[Zidx]/new_dust_masses_solar_DF$NewDustMassq035RR14Q50[Zidx])
 )
 
 maghist(
