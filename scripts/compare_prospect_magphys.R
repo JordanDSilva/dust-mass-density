@@ -751,6 +751,9 @@ print(
   log10(median(10^lambdar_magphys_match$mass_dust_percentile50/new_dust_masses_solar_DF$NewDustMassq10Q50))
 )
 print(
+  log10(median(10^lambdar_magphys_match$mass_dust_percentile50/new_dust_masses_solar_DF$NewDustMassqZRR14Q50))
+)
+print(
   log10(median(10^lambdar_magphys_match$mass_dust_percentile50/new_dust_masses_solar_DF$NewDustMassq14Q50))
 )
 print(
@@ -765,12 +768,12 @@ print(
   Md_corr
 )
 
-Zidx = new_dust_masses_solar_DF$ZfinalQ50 >= 0.01 & new_dust_masses_solar_DF$ZfinalQ50 <= 0.02
+Zidx = new_dust_masses_solar_DF$ZfinalQ50 >= 0.014
 print(
   log10(median(10^lambdar_magphys_match$mass_dust_percentile50/new_dust_masses_solar_DF$NewDustMassq035RR14Q50))
 )
 print(
-  log10(median(10^lambdar_magphys_match$mass_dust_percentile50[Zidx]/new_dust_masses_solar_DF$NewDustMassq035RR14Q50[Zidx]))
+  log10(median(10^lambdar_magphys_match$mass_dust_percentile50[Zidx]/new_dust_masses_solar_DF$NewDustMassqZRR14Q50[Zidx]))
 )
 
 maghist(
