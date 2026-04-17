@@ -3726,17 +3726,6 @@ cdmh_hybrid_corr_Zsol = data.frame(foreach(i = 1:length(combine_hybrid_dmf_corr)
   combine_hybrid_dmf_corr_Zsol[[i]]$cosmic
 })
 
-## Check the difference in the slopes 
-message("From z = ", zmids[1], "to z = ", zmids[11])
-message( "Corr ", log10(cdmh_hybrid_corr$Q50[11])-log10(cdmh_hybrid_corr$Q50[1]) )
-message( "Solar RR14 ", log10(cdmh_hybrid_corr_Zsol$Q50[11])-log10(cdmh_hybrid_corr_Zsol$Q50[1]) )
-message( "Solar ", log10(cdmh_hybrid$Q50[11])-log10(cdmh_hybrid$Q50[1]) )
-
-message("From z = ", zmids[11], "to z = ", zmids[15])
-message( "Corr ", log10(cdmh_hybrid_corr$Q50[11])-log10(cdmh_hybrid_corr$Q50[15]) )
-message( "Solar RR14 ", log10(cdmh_hybrid_corr_Zsol$Q50[11])-log10(cdmh_hybrid_corr_Zsol$Q50[15]) )
-message( "Solar ", log10(cdmh_hybrid$Q50[11])-log10(cdmh_hybrid$Q50[15]) )
-
 cgmh_noAGN_corr = data.frame(foreach(i = 1:length(combine_noAGN_gmf_corr), .combine = bind_rows) %do% {
   combine_noAGN_gmf_corr[[i]]$cosmic
 })
